@@ -12,7 +12,12 @@ WRF_DIR = config["eessi_wrf_dir"]
 WPS_CONFIGURE_OPTION = config["wps_configure_option"]
 
 # Jasper and WPS source directories
-JASPER_DIR = os.path.join(INSTALL_ROOT, "jasper-1.900.1")
+JASPER_VERSION = config.get("jasper_version", "1.900.1")
+JASPER_DOWNLOAD_URL = config.get(
+    "jasper_download_url",
+    f"https://www2.mmm.ucar.edu/wrf/OnLineTutorial/compile_tutorial/tar_files/jasper-{JASPER_VERSION}.tar.gz"
+)
+JASPER_DIR = os.path.join(INSTALL_ROOT, f"jasper-{JASPER_VERSION}")
 WPS_SRC_DIR = os.path.join(workflow.basedir, "..", "src", "WPS")
 
 rule all:
@@ -29,21 +34,22 @@ rule install_jasper:
         inc = os.path.join(JASPER_DIR, "include", "jasper", "jasper.h")
     log:
         "logs/install_jasper.log"
+    params:
+        download_url = JASPER_DOWNLOAD_URL,
+        version = JASPER_VERSION,
+        prefix = JASPER_DIR
+    shadow: "minimal"
     shell:
         """
-        mkdir -p src/jasper_build && cd src/jasper_build
+        exec >> {log} 2>&1 # Redirect all output to log file
 
-        wget --quiet https://www2.mmm.ucar.edu/wrf/OnLineTutorial/compile_tutorial/tar_files/jasper-1.900.1.tar.gz
-        tar -xvzf jasper-1.900.1.tar.gz
-        cd jasper-1.900.1
+        wget --quiet {params.download_url}
+        tar -xvzf jasper-{params.version}.tar.gz
+        cd jasper-{params.version}
         
-        ./configure --prefix={JASPER_DIR} >> ../../../{log} 2>&1
-        make >> ../../../{log} 2>&1
-        make install >> ../../../{log} 2>&1
-        
-        # Cleanup
-        cd ../../..
-        rm -rf src/jasper_build
+        ./configure --prefix={params.prefix}
+        make
+        make install
         """
 
 # -----------------------------------------------------------------------------
@@ -55,12 +61,16 @@ rule clone_wps:
         config_script = os.path.join(WPS_SRC_DIR, "configure")
     log:
         "logs/clone_wps.log"
+    params:
+        src_dir = WPS_SRC_DIR,
+        version = WPS_VERSION
     shell:
         """
-        mkdir -p src
-        git clone https://github.com/wrf-model/WPS.git {WPS_SRC_DIR} > {log} 2>&1
-        cd {WPS_SRC_DIR}
-        git checkout {WPS_VERSION} >> ../../{log} 2>&1
+        exec > {log} 2>&1
+        mkdir -p "$(dirname {params.src_dir})"
+        git clone https://github.com/wrf-model/WPS.git {params.src_dir}
+        cd {params.src_dir}
+        git checkout {params.version}
         """
 
 # -----------------------------------------------------------------------------
@@ -75,23 +85,32 @@ rule configure_wps:
         make_config = os.path.join(WPS_SRC_DIR, "configure.wps")
     log:
         "logs/configure_wps.log"
+    params:
+        eessi_init = EESSI_INIT,
+        wrf_module = WRF_MODULE,
+        jasper_dir = JASPER_DIR,
+        wrf_dir = WRF_DIR,
+        src_dir = WPS_SRC_DIR,
+        config_option = WPS_CONFIGURE_OPTION
     shell:
         """
         # Clean sub-shell inheriting PATH for compiler calls:q
         env -i HOME=$HOME TERM=$TERM PATH=/usr/bin:/bin:/usr/local/bin:$PATH /usr/bin/bash -c "
+            exec >> {log} 2>&1
+
             # 1. Load EESSI and NetCDF dependencies from the toolchain
-            source {EESSI_INIT}
-            module load {WRF_MODULE}
+            source {params.eessi_init}
+            module load {params.wrf_module}
             
             export LD_LIBRARY_PATH=$$NETCDFF/lib:$$NETCDF_C/lib:$${{LD_LIBRARY_PATH:-}}
-            export JASPERLIB={JASPER_DIR}/lib
-            export JASPERINC={JASPER_DIR}/include
-            export WRF_DIR={WRF_DIR}
+            export JASPERLIB={params.jasper_dir}/lib
+            export JASPERINC={params.jasper_dir}/include
+            export WRF_DIR={params.wrf_dir}
             
-            # 2. Configue WPS with selected options (GRIB2 enabled) and capture the output
-            cd {WPS_SRC_DIR}
+            # 2. Configue WPS with selected options (GRIB2 enabled)
+            cd {params.src_dir}
             ./clean -a > /dev/null 2>&1
-            echo "{WPS_CONFIGURE_OPTION}" | ./configure > ../../{log} 2>&1
+            echo "{params.config_option}" | ./configure
         "
         """
 
@@ -109,6 +128,12 @@ rule compile_wps:
         final_flag = f"logs/wps_installation_{WPS_VERSION}.done"
     log:
         "logs/compile_wps.log"
+    params:
+        eessi_init = EESSI_INIT,
+        wrf_module = WRF_MODULE,
+        jasper_dir = JASPER_DIR,
+        wrf_dir = WRF_DIR,
+        src_dir = WPS_SRC_DIR
     threads: 8
     shell:
         """
@@ -116,19 +141,19 @@ rule compile_wps:
 
         # Clean sub-shell inheriting PATH for compiler calls
         env -i HOME=$HOME TERM=$TERM PATH=/usr/bin:/bin:/usr/local/bin:$PATH /usr/bin/bash -c "
-            source {EESSI_INIT}
-            module load {WRF_MODULE}
-            
+            source {params.eessi_init}
+            module load {params.wrf_module}
+
             # OpenBLAS can cause issues with WPS compilation, so we set it to use a single thread
             export OPENBLAS_NUM_THREADS=1
-            
-            export LD_LIBRARY_PATH=$$NETCDFF/lib:$$NETCDF_C/lib:{JASPER_DIR}/lib:$${{LD_LIBRARY_PATH:-}}
-            export JASPERLIB={JASPER_DIR}/lib
-            export JASPERINC={JASPER_DIR}/include
-            export WRF_DIR={WRF_DIR}
-            
-            cd {WPS_SRC_DIR}
-            tcsh ./compile > ../../{log} 2>&1
+
+            export LD_LIBRARY_PATH=$$NETCDFF/lib:$$NETCDF_C/lib:{params.jasper_dir}/lib:$${{LD_LIBRARY_PATH:-}}
+            export JASPERLIB={params.jasper_dir}/lib
+            export JASPERINC={params.jasper_dir}/include
+            export WRF_DIR={params.wrf_dir}
+
+            cd {params.src_dir}
+            tcsh ./compile
             
             # Validate the physical success and sign the pipeline
             if [ -f "geogrid.exe" ] && [ -f "ungrib.exe" ] && [ -f "metgrid.exe" ]; then
