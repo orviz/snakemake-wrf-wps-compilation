@@ -3,7 +3,7 @@ wps_version: "v4.6.0"
 wps_configure_option: "3" # foss-dmpar option (GRIB2 enabled)
 
 # Local installation path
-install_root: "/home/user/sw"
+install_root: "/home/user/sw/WPS-v4.6.0"
 
 # EESSI (CVMFS) environment settings for WRF compilation and execution
 eessi_init_script: "/cvmfs/software.eessi.io/versions/2025.06/init/bash"
