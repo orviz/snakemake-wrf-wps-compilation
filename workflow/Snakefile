@@ -81,7 +81,7 @@ rule configure_wps:
             source {config[eessi_init_script]}
             module load {WRF_MODULE}
             
-            export LD_LIBRARY_PATH=$NETCDFF/lib:$NETCDF_C/lib:${{LD_LIBRARY_PATH:-}}
+            export LD_LIBRARY_PATH=$$NETCDFF/lib:$$NETCDF_C/lib:$${{LD_LIBRARY_PATH:-}}
             export JASPERLIB={JASPER_DIR}/lib
             export JASPERINC={JASPER_DIR}/include
             export WRF_DIR={config[eessi_wrf_dir]}
@@ -114,10 +114,8 @@ rule compile_wps:
 
         # Clean sub-shell inheriting PATH for compiler calls
         env -i HOME=$HOME TERM=$TERM PATH=/usr/bin:/bin:/usr/local/bin:$PATH /usr/bin/bash -c "
-            set +u
             source {config[eessi_init_script]}
             module load {WRF_MODULE}
-            set -u
             
             # OpenBLAS can cause issues with WPS compilation, so we set it to use a single thread
             export OPENBLAS_NUM_THREADS=1
