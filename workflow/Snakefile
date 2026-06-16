@@ -47,6 +47,11 @@ rule install_jasper:
         tar -xvzf jasper-{params.version}.tar.gz
         cd jasper-{params.version}
         
+	# CFLAGS added for potential conflicts among modern gcc compiler versions and Jasper
+	# -fcommon: Resuelve las definiciones duplicadas de variables globales (el error que prevenimos antes).
+	# -Wno-error=implicit-function-declaration: Le ordena a tu flamante GCC 15 que degrade las declaraciones implícitas de vuelta a simples advertencias (warnings), permitiendo que la compilación de Jasper finalice con éxito.
+	# -Wno-error=incompatible-pointer-types: En sistemas Linux modernos de 64 bits, el tipo interno de Jasper jpc_fix_t se evalúa como un entero de tipo largo de 64 bits (long int), mientras que otras funciones de la librería esperan punteros a enteros estándar de 32 bits (int). Este flag rebaja la severidad del compilador.
+        export CFLAGS="-fcommon -Wno-error=implicit-function-declaration -Wno-error=incompatible-pointer-types"
         ./configure --prefix={params.prefix}
         make
         make install
