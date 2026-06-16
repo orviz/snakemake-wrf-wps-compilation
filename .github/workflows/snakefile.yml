@@ -1,0 +1,73 @@
+name: CI Pipeline for Snakefile validation
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate-workflow:
+    runs-on: ubuntu-latest
+    steps:
+      # 1. Download source code from the repository to the GitHub Actions runner
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. Setup Pixi Environment for Snakemake execution and linting
+      - name: Setup Pixi Environment
+        uses: prefix-dev/setup-pixi@v0.8.1
+        with:
+          pixi-version: v0.41.1
+          cache: true
+
+      # 3. Install System Dependencies
+      - name: Install System Dependencies
+        run: sudo apt-get update && sudo apt-get install -y jq
+
+      # 4. Advanced Quality Lint Check
+      - name: Advanced Quality Lint Check
+        run: |
+          echo "Initializing Snakemake Linter..."
+          
+          # Call linter and export to JSON (do not fail if linter warnings appear)
+          pixi run snakemake --lint json > linter.json || true
+          
+          # Print resulting JSON for debugging purposes
+          cat linter.json
+          
+          # Count real warnings, specifically excluding the warning about missing conda environments
+          REAL_ERRORS=$(jq '[.rules[] | select(.lints[] | contains("Specify a conda environment or container") | not)] | length' linter.json)
+          
+          echo "--------------------------------------------------------"
+          echo "$REAL_ERRORS critical warnings found in the code (excluding conda environments)."
+          echo "--------------------------------------------------------"
+          
+          # Stop the pipeline if there are real linter violations
+          if [ "$REAL_ERRORS" -gt 0 ]; then
+            echo "ERROR: The pipeline stops due to real quality violations."
+            exit 1
+          else
+            echo "SUCCESS: No critical linter errors found."
+          fi
+
+      # 5. Validate Workflow Structure (Dry-Run)
+      - name: Validate Workflow Structure (Dry-Run)
+        run: |
+          echo "Initializing dependency simulation (DAG) of the Snakefile..."
+          
+          # Capture the exit code ($?) of Snakemake to evaluate the logical success of the flow
+          pixi run snakemake --dry-run --printshellcmds > dryrun_output.txt 2>&1
+          DRY_RUN_STATUS=$?
+          
+          # Print the complete output of the simulation
+          cat dryrun_output.txt
+          
+          echo "--------------------------------------------------------"
+          # Strict control of pipeline stop if the file graph is broken
+          if [ $DRY_RUN_STATUS -ne 0 ]; then
+            echo "CRITICAL ERROR: The Snakemake dependency graph is broken ."
+            exit 1
+          else
+            echo "SUCCESS: The workflow is logically connected and ready for production."
+          fi

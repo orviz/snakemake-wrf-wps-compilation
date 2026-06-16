@@ -128,21 +128,26 @@ rule compile_wps:
         final_flag = f"logs/wps_installation_{WPS_VERSION}.done"
     log:
         "logs/compile_wps.log"
+    threads: 8
     params:
         eessi_init = EESSI_INIT,
         wrf_module = WRF_MODULE,
         jasper_dir = JASPER_DIR,
         wrf_dir = WRF_DIR,
         src_dir = WPS_SRC_DIR
-    threads: 8
     shell:
         """
         PIXI_BIN_DIR=$(pwd)/.pixi/envs/default/bin
 
         # Clean sub-shell inheriting PATH for compiler calls
         env -i HOME=$HOME TERM=$TERM PATH=/usr/bin:/bin:/usr/local/bin:$PATH /usr/bin/bash -c "
+            exec >> {log} 2>&1
+
             source {params.eessi_init}
             module load {params.wrf_module}
+
+            # Pass the defined number of {threads} for WRF/WPS compilation
+            export J={threads}
 
             # OpenBLAS can cause issues with WPS compilation, so we set it to use a single thread
             export OPENBLAS_NUM_THREADS=1
