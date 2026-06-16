@@ -97,27 +97,43 @@ rule configure_wps:
         wrf_dir = WRF_DIR,
         src_dir = WPS_SRC_DIR,
         config_option = WPS_CONFIGURE_OPTION
-    shell:
-        """
-        # Clean sub-shell inheriting PATH for compiler calls:q
-        env -i HOME=$HOME TERM=$TERM PATH=/usr/bin:/bin:/usr/local/bin:$PATH /usr/bin/bash -c "
+    run:
+        shell(
+            """
+            PIXI_BIN_DIR=$(pwd)/.pixi/envs/default/bin
+            export PATH=$PIXI_BIN_DIR:/usr/bin:/bin:/usr/local/bin:$PATH
+            
             exec >> {log} 2>&1
 
-            # 1. Load EESSI and NetCDF dependencies from the toolchain
+            set +u
             source {params.eessi_init}
             module load {params.wrf_module}
+            set -u
             
-            export LD_LIBRARY_PATH=$$NETCDFF/lib:$$NETCDF_C/lib:$${{LD_LIBRARY_PATH:-}}
+            export LD_LIBRARY_PATH=$NETCDFF/lib:$NETCDF_C/lib:${{LD_LIBRARY_PATH:-}}
             export JASPERLIB={params.jasper_dir}/lib
             export JASPERINC={params.jasper_dir}/include
             export WRF_DIR={params.wrf_dir}
             
-            # 2. Configue WPS with selected options (GRIB2 enabled)
             cd {params.src_dir}
-            ./clean -a > /dev/null 2>&1
-            echo "{params.config_option}" | ./configure
-        "
-        """
+            tcsh ./clean -a
+            echo '{params.config_option}' | ./configure
+            """
+        )
+
+        # Hack to use pixi/conda gcc binary: WPS compiler hardcodes path to /usr/bin/cpp
+        config_path = output.make_config
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                content = f.read()
+            
+            updated_content = content.replace("/usr/bin/cpp", "cpp")
+            
+            with open(config_path, "w") as f:
+                f.write(updated_content)
+                
+            with open(str(log), "a") as l:
+                l.write("\n--> Absolute path to /usr/bin/cpp set to 'cpp'.\n")
 
 # -----------------------------------------------------------------------------
 # RULE 4: Final compilation of the geographic and meteorological binaries
@@ -142,32 +158,41 @@ rule compile_wps:
     threads: 8
     shell:
         """
+        # Prioritize system's PATH for EESSI compilers
         PIXI_BIN_DIR=$(pwd)/.pixi/envs/default/bin
+        export PATH=$PIXI_BIN_DIR:/usr/bin:/bin:/usr/local/bin:$PATH
+        
+        exec >> {log} 2>&1
 
-        # Clean sub-shell inheriting PATH for compiler calls
-        env -i HOME=$HOME TERM=$TERM PATH=/usr/bin:/bin:/usr/local/bin:$PATH /usr/bin/bash -c "
-            exec >> {log} 2>&1
+        # Load EESSI
+        set +u
+        source {params.eessi_init}
+        module load {params.wrf_module}
+        set -u
 
-            source {params.eessi_init}
-            module load {params.wrf_module}
+        # Parallel Fortran compilation
+        # OpenBLAS can cause issues with WPS compilation, so we set it to use a single thread
+        export J={threads}
+        export OPENBLAS_NUM_THREADS=1
 
-            # OpenBLAS can cause issues with WPS compilation, so we set it to use a single thread
-            export OPENBLAS_NUM_THREADS=1
+        unset CFLAGS
+        unset LDFLAGS
+        unset FFLAGS
+        unset FCFLAGS
 
-            export LD_LIBRARY_PATH=$$NETCDFF/lib:$$NETCDF_C/lib:{params.jasper_dir}/lib:$${{LD_LIBRARY_PATH:-}}
-            export JASPERLIB={params.jasper_dir}/lib
-            export JASPERINC={params.jasper_dir}/include
-            export WRF_DIR={params.wrf_dir}
+        export LD_LIBRARY_PATH=$NETCDFF/lib:$NETCDF_C/lib:{params.jasper_dir}/lib:${{LD_LIBRARY_PATH:-}}
+        export JASPERLIB={params.jasper_dir}/lib
+        export JASPERINC={params.jasper_dir}/include
+        export WRF_DIR={params.wrf_dir}
 
-            cd {params.src_dir}
-            tcsh ./compile
-            
-            # Validate the physical success and sign the pipeline
-            if [ -f "geogrid.exe" ] && [ -f "ungrib.exe" ] && [ -f "metgrid.exe" ]; then
-                touch ../../{output.final_flag}
-            else
-                echo "Error: Compilation failed. Check logs/compile_wps.log" >&2
-                exit 1
-            fi
-        "
+        cd {params.src_dir}
+        tcsh ./compile
+        
+        # Validate the physical success and sign the pipeline
+        if [ -f "geogrid.exe" ] && [ -f "ungrib.exe" ] && [ -f "metgrid.exe" ]; then
+            touch "../../{output.final_flag}"
+        else
+            echo "Error: Compilation failed. No se encontraron los 3 ejecutables principales." >&2
+            exit 1
+        fi
         """

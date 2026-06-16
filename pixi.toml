@@ -14,7 +14,11 @@ conda = "*"
 snakemake = ">=8.0"
 snakemake-executor-plugin-slurm = "*"
 
+# --- System requirements ---
 tcsh = "*"
+make = "*"
+m4 = "*"
+gcc = "*"
 
 [tasks]
 dry-run   = "snakemake --dry-run --profile"
