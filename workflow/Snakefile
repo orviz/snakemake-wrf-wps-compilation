@@ -6,10 +6,6 @@ configfile: "config/config.yaml"
 # Dynamic variables from config.yaml
 INSTALL_ROOT = config["install_root"]
 WPS_VERSION = config["wps_version"]
-EESSI_INIT = config["eessi_init_script"]
-WRF_MODULE = config["eessi_wrf_module"]
-WRF_DIR = config["eessi_wrf_dir"]
-WPS_CONFIGURE_OPTION = config["wps_configure_option"]
 
 # Jasper and WPS source directories
 JASPER_VERSION = config.get("jasper_version", "1.900.1")
@@ -19,6 +15,15 @@ JASPER_DOWNLOAD_URL = config.get(
 )
 JASPER_DIR = os.path.join(INSTALL_ROOT, f"jasper-{JASPER_VERSION}")
 WPS_SRC_DIR = os.path.join(workflow.basedir, "..", "src", "WPS")
+
+# Common rule parameters
+EESSI_ENV_PARAMS = {
+    "eessi_init": config["eessi_init_script"],
+    "wrf_module": config["eessi_wrf_module"],
+    "wrf_dir": config["eessi_wrf_dir"],
+    "config_option": config["wps_configure_option"],
+    "wps_version": WPS_VERSION
+}
 
 rule all:
     input:
@@ -37,7 +42,8 @@ rule install_jasper:
     params:
         download_url = JASPER_DOWNLOAD_URL,
         version = JASPER_VERSION,
-        prefix = JASPER_DIR
+        # Infer prefix dinamically from the output path
+        prefix = lambda wildcards, output: os.path.dirname(os.path.dirname(output.lib))
     shadow: "minimal"
     shell:
         """
@@ -62,8 +68,8 @@ rule clone_wps:
     log:
         "logs/clone_wps.log"
     params:
-        src_dir = WPS_SRC_DIR,
-        version = WPS_VERSION
+        **EESSI_ENV_PARAMS,
+        src_dir = lambda wildcards, output: os.path.dirname(output.config_script)
     shell:
         """
         exec > {log} 2>&1
@@ -86,12 +92,9 @@ rule configure_wps:
     log:
         "logs/configure_wps.log"
     params:
-        eessi_init = EESSI_INIT,
-        wrf_module = WRF_MODULE,
-        jasper_dir = JASPER_DIR,
-        wrf_dir = WRF_DIR,
-        src_dir = WPS_SRC_DIR,
-        config_option = WPS_CONFIGURE_OPTION
+        **EESSI_ENV_PARAMS,
+        src_dir = lambda wildcards, output: os.path.dirname(output.make_config),
+        jasper_dir = lambda wildcards, input: os.path.dirname(os.path.dirname(input.jasper_lib))
     shell:
         """
         # Clean sub-shell inheriting PATH for compiler calls:q
@@ -130,11 +133,9 @@ rule compile_wps:
         "logs/compile_wps.log"
     threads: 8
     params:
-        eessi_init = EESSI_INIT,
-        wrf_module = WRF_MODULE,
-        jasper_dir = JASPER_DIR,
-        wrf_dir = WRF_DIR,
-        src_dir = WPS_SRC_DIR
+        **EESSI_ENV_PARAMS,
+        src_dir = lambda wildcards, output: os.path.dirname(output.geogrid),
+        jasper_dir = JASPER_DIR
     shell:
         """
         PIXI_BIN_DIR=$(pwd)/.pixi/envs/default/bin
