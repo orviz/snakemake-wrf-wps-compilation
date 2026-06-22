@@ -6,15 +6,9 @@
 eessi_init_script: "/cvmfs/software.eessi.io/versions/2025.06/init/bash"
 
 # Path to the EasyBuild recipe (EasyConfig) file for WPS.
-wps_easyconfig_path: "config/WPS-4.6.0-custom.eb"
+wps_easyconfig_path: "config/WPS-custom.eb.j2"
 
-# -----------------------------------------------------------------------------
-# GIT SOURCE CONTROL PARAMETERS (For Custom Modifications)
-# -----------------------------------------------------------------------------
-# URL of the GitHub repository containing WPS (official or your custom fork).
-# Default official: "https://github.com/wrf-model/WPS"
-wps_git_repo: "https://github.com/wrf-model/WPS"
-
-# The specific version, tag, branch, or commit hash you want to compile.
-# Examples: "v4.6.0", "my-physics-patch-branch", "a1b2c3d4"
-wps_git_version: "v4.6.0-patch1"
+# WPS version to compile (Git settings)
+wps_git_repo: "https://github.com/wrf-model/WPS.git"
+wps_git_tag: "v4.6.0"
+wps_git_sha256: "ca7bbfc6c28a107c6eb00ded70e693f5c9a3926ecde7656f49e306c9eb9a309b"
