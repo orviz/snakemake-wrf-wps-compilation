@@ -18,3 +18,4 @@ wps_git_repo: "https://github.com/wrf-model/WPS"
 # The specific version, tag, branch, or commit hash you want to compile.
 # Examples: "v4.6.0", "my-physics-patch-branch", "a1b2c3d4"
 wps_git_version: "v4.6.0-patch1"
+wps_git_sha256: "ca7bbfc6c28a107c6eb00ded70e693f5c9a3926ecde7656f49e306c9eb9a309b"

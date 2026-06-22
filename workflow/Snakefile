@@ -1,11 +1,21 @@
 import os
+from jinja2 import Template
 
 # Load the user-defined configuration file
 configfile: "config/config.yaml"
 
+# Required parameters for WPS compilation
+required_keys = ["wps_git_repo", "wps_git_tag", "wps_git_sha256"]
+for key in required_keys:
+    if key not in config or not config[key]:
+        raise KeyError(
+            f"\n❌ [Snakemake Error]: Required parameter '{key}' is not defined or empty in config.yaml.\n"
+            f"For security and reproducibility, you must specify the exact repository, tag, and checksum."
+        )
+
 # Retrieve pipeline parameters from the configuration file
 EESSI_INIT = config.get("eessi_init_script", "/cvmfs/software.eessi.io/versions/latest/init/bash")
-WPS_EB_CONFIG = config.get("wps_easyconfig_path", "config/WPS-4.6.0-custom.eb")
+WPS_EB_TEMPLATE = "config/WPS-4.6.0-custom.eb.j2"
 WPS_GIT_REPO = config.get("wps_git_repo", "https://github.com")
 WPS_GIT_VERSION = config.get("wps_git_version", "v4.6.0")
 
@@ -13,17 +23,35 @@ rule all:
     input:
         "bin/wps_compilation.done"
 
-# =========================================================================
-# RULE: COMPILE WPS VIA EESSI & EASYBUILD (GIT DRIVEN)
-# =========================================================================
-# This rule triggers EasyBuild on the HPC cluster using the EESSI stack.
-# It injects the targeted Git repository and version tag from the config
-# straight into the EasyConfig builder environment.
-# =========================================================================
-rule compile_wps_hpc:
+rule render_wps_easyconfig:
+    """Inject parameters into EB config."""
     input:
-        # Track the EasyConfig recipe file. If the recipe changes, recompile.
-        eb_recipe = WPS_EB_CONFIG
+        eb_template = WPS_EB_TEMPLATE
+    output:
+        eb_real = GENERATED_EB
+    resources:
+        runtime = 2,
+        mem_mb = 1024
+    run:
+        print(f"[Snakemake] Generating customized EasyConfig: {output.eb_real}")
+
+        with open(input.eb_template, "r") as f:
+            template_content = f.read()
+
+        template = Template(template_content)
+        rendered_content = template.render(
+            wps_git_repo=WPS_GIT_REPO,
+            wps_git_version=WPS_GIT_VERSION,w
+            wps_git_sha256=config.get("wps_git_sha256")
+        )
+
+        with open(output.eb_real, "w") as f:
+            f.write(rendered_content)
+
+rule compile_wps_hpc:
+    """Launch EB compilation via EESSI."""
+    input:
+        eb_recipe = GENERATED_EB
     output:
         marker = "bin/wps_compilation.done"
     shell:
@@ -38,19 +66,15 @@ rule compile_wps_hpc:
             echo "[Snakemake Error] EESSI initialization script not found at: {EESSI_INIT}"
             exit 1
         fi
-        
+
         # 2. Load the official extension tool which safely configures EasyBuild on top of EESSI
         module load EESSI-extend
         set -u
 
-        # 3. Export Git parameters into the environment for EasyBuild to read them
-        export WPS_GIT_REPO="{WPS_GIT_REPO}"
-        export WPS_GIT_VERSION="{WPS_GIT_VERSION}"
-
         echo "[Snakemake] Building WPS from Repo: $WPS_GIT_REPO ($WPS_GIT_VERSION)"
-        
-        # 4. Invoke EasyBuild. It will natively clone the code and handle all dependencies
-        eb {input.eb_recipe} --robot
+
+        # 3. Invoke EasyBuild. It will natively clone the code and handle all dependencies
+        eb {input.eb_recipe} --robot --local-var-naming-check=warn
 
         # Generate the execution proof marker token to let Snakemake satisfy downstream dependencies
         mkdir -p $(dirname {output.marker})
