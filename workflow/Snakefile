@@ -1,82 +1,113 @@
+# workflow/Snakefile
 import os
 from jinja2 import Template
 
-# Load the user-defined configuration file
+# Cargar el archivo de configuración definido por el usuario
 configfile: "config/config.yaml"
 
-# Required parameters for WPS compilation
-required_keys = ["wps_git_repo", "wps_git_tag", "wps_git_sha256"]
+# --- 1. VALIDACIÓN ESTRICTA DE PARÁMETROS GENÉRICOS ---
+required_keys = ["wps_git_repo", "wps_version", "wps_git_sha256"]
 for key in required_keys:
     if key not in config or not config[key]:
         raise KeyError(
-            f"\n❌ [Snakemake Error]: Required parameter '{key}' is not defined or empty in config.yaml.\n"
-            f"For security and reproducibility, you must specify the exact repository, tag, and checksum."
+            f"\n❌ [Snakemake Error]: El parámetro obligatorio '{key}' no está definido en config.yaml.\n"
         )
 
-# Retrieve pipeline parameters from the configuration file
-EESSI_INIT = config.get("eessi_init_script", "/cvmfs/software.eessi.io/versions/latest/init/bash")
-WPS_EB_TEMPLATE = "config/WPS-4.6.0-custom.eb.j2"
-WPS_GIT_REPO = config.get("wps_git_repo", "https://github.com")
-WPS_GIT_VERSION = config.get("wps_git_version", "v4.6.0")
+# --- 2. EXTRACCIÓN GLOBAL DE VARIABLES GENÉRICAS ---
+WPS_REPO    = config["wps_git_repo"]
+WPS_VERSION = config["wps_version"]  
+WPS_SHA256  = config["wps_git_sha256"]
+
+EESSI_INIT      = config.get("eessi_init_script", "/cvmfs/software.eessi.io/versions/latest/init/bash")
+WPS_EB_TEMPLATE = config.get("wps_easyconfig_path", "config/WPS-custom.eb.j2")
+
+# Generamos de forma dinámica el nombre de la receta que EasyBuild espera leer
+GENERATED_EB    = f"config/WPS-{WPS_VERSION}-custom.eb"
 
 rule all:
     input:
         "bin/wps_compilation.done"
 
+# =========================================================================
+# REGLA 1 (LIGERA - PYTHON): Renderizado de la receta mediante Jinja2
+# =========================================================================
 rule render_wps_easyconfig:
-    """Inject parameters into EB config."""
+    """Lee la plantilla genérica .j2 e inyecta las variables dinámicas."""
     input:
         eb_template = WPS_EB_TEMPLATE
     output:
         eb_real = GENERATED_EB
+    params:
+        repo   = WPS_REPO,
+        tag    = WPS_VERSION,
+        sha256 = WPS_SHA256
     resources:
         runtime = 2,
         mem_mb = 1024
     run:
-        print(f"[Snakemake] Generating customized EasyConfig: {output.eb_real}")
-
+        print(f"[Snakemake] Generating customized EasyConfig via Jinja2: {output.eb_real}")
+        
         with open(input.eb_template, "r") as f:
             template_content = f.read()
-
+            
         template = Template(template_content)
         rendered_content = template.render(
-            wps_git_repo=WPS_GIT_REPO,
-            wps_git_version=WPS_GIT_VERSION,w
-            wps_git_sha256=config.get("wps_git_sha256")
+            wps_git_repo=params.repo,
+            wps_git_tag=params.tag,
+            wps_git_sha256=params.sha256
         )
-
+        
         with open(output.eb_real, "w") as f:
             f.write(rendered_content)
 
+# =========================================================================
+# REGLA 2 (PESADA - BASH): Ejecución de la compilación en el Clúster HPC
+# =========================================================================
 rule compile_wps_hpc:
-    """Launch EB compilation via EESSI."""
+    """Recibe la receta renderizada y lanza EasyBuild empleando banderas universales."""
     input:
         eb_recipe = GENERATED_EB
     output:
         marker = "bin/wps_compilation.done"
+    params:
+        repo = WPS_REPO,
+        tag  = WPS_VERSION,
+        # Evaluamos las rutas absolutas estáticas de los directorios usando Python
+        recipe_abs = os.path.abspath(GENERATED_EB),
+        marker_abs = os.path.abspath("bin/wps_compilation.done"),
+        build_path  = os.path.abspath("easybuild_workspace/build"),
+        source_path = os.path.abspath("easybuild_workspace/sources"),
+        prefix_path = os.path.abspath("easybuild_workspace/container")
+    threads: 8
+    resources:
+        runtime = 120,
+        mem_mb = 16384
     shell:
         """
-        echo "[Snakemake] Targeting HPC Environment via EESSI..."
-
-        # 1. Initialize EESSI stack via the parameterized initialization script
-        set +u
-        if [ -f "{EESSI_INIT}" ]; then
+        # BYPASS LMOD & PATH ERRORS: Pasamos los parámetros absolutos de Snakemake directo al comando
+        env -i HOME=$HOME TERM=$TERM PATH=/usr/bin:/bin:/usr/local/bin:$PATH /usr/bin/bash -c '
+            set +u
             source {EESSI_INIT}
-        else
-            echo "[Snakemake Error] EESSI initialization script not found at: {EESSI_INIT}"
-            exit 1
-        fi
+            module load EESSI-extend
+            set -u
 
-        # 2. Load the official extension tool which safely configures EasyBuild on top of EESSI
-        module load EESSI-extend
-        set -u
+            # --- BLINDAJE DE MEMORIA PARA ARQUITECTURA ZEN3 ---
+            export OPENBLAS_NUM_THREADS=1
+            export FLEXIBLAS_NUM_THREADS=1
+            export MKL_NUM_THREADS=1
+            ulimit -s unlimited
 
-        echo "[Snakemake] Building WPS from Repo: $WPS_GIT_REPO ($WPS_GIT_VERSION)"
+            echo "[Snakemake] Building WPS from Repo: {params.repo} ({params.tag})"
+            print "[Snakemake] Launching EasyBuild build process..."
 
-        # 3. Invoke EasyBuild. It will natively clone the code and handle all dependencies
-        eb {input.eb_recipe} --robot --local-var-naming-check=warn
+            # 3. Invocamos EasyBuild usando las rutas resueltas limpiamente por Snakemake
+            eb "{params.recipe_abs}" --robot --local-var-naming-check=warn --skip-test-step \
+                --buildpath="{params.build_path}" \
+                --sourcepath="{params.source_path}" \
+                --prefix="{params.prefix_path}"
 
-        # Generate the execution proof marker token to let Snakemake satisfy downstream dependencies
-        mkdir -p $(dirname {output.marker})
-        touch {output.marker}
+            # 4. Generar el testigo físico de finalización exitosa de forma segura
+            mkdir -p "$(dirname "{params.marker_abs}")"
+            touch "{params.marker_abs}"
+        '
         """
