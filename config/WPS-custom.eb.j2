@@ -27,3 +27,13 @@ dependencies = [
     ('libpng', '1.6.43'),
 ]
 moduleclass = 'geo'
+
+local_src_folder = "WPS-{{ wps_git_tag.lstrip('v') }}"
+sanity_check_paths = {
+    'files': [
+        '%s/geogrid.exe' % local_src_folder,
+        '%s/metgrid.exe' % local_src_folder,
+        '%s/ungrib.exe' % local_src_folder
+    ],
+    'dirs': ['%s/util' % local_src_folder]
+}
