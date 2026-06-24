@@ -1,19 +1,26 @@
-# config/WPS-4.6.0-custom.eb.j2
+# config/WPS-custom.eb.j2
 import os
 
 name = 'WPS'
-version = '{{ wps_git_tag }}' # Inyección directa limpia
+version = '{{ wps_version }}' # Recibe 'v4.6.0' puro del config.yaml
 
-homepage = 'https://www.mmm.ucar.edu/models/wrf'
-description = "WPS compiled via native Git cloning with commit-level checksum validation."
+homepage = 'https://ucar.edu'
+description = "WPS compiled via official GitHub release tarball with strict SHA256 validation."
 
 toolchain = {'name': 'foss', 'version': '2024a'}
 toolchainopts = {'opt': True}
 
+# =========================================================================
+# OFFICIAL RELEASE TARBALL DOWNLOAD (Pure Upstream Versioning)
+# =========================================================================
 source_urls = ['{{ wps_git_repo }}/archive/refs/tags/']
-sources = ['%s.tar.gz' % version]
-# Abort if SHA256 does not match
+sources = ['%s.tar.gz' % version] 
 checksums = ['{{ wps_git_sha256 }}']
+
+# TRUCO NATIVO DE EB: Como version tiene la 'v' (v4.6.0) pero el tarball de GitHub 
+# se descomprime sin la 'v' (WPS-4.6.0), le indicamos a EasyBuild la ruta física exacta
+buildinsubdir = True
+unpack_options = '--strip-components=1'
 
 buildtype = "dmpar"
 versionsuffix = '-%s' % buildtype
@@ -26,14 +33,34 @@ dependencies = [
     ('zlib', '1.3.1'),
     ('libpng', '1.6.43'),
 ]
+
+# =========================================================================
+# UNIVERSAL NETCDF & JASPER BRIDGE INJECTION
+# =========================================================================
+prebuildopts = 'export LD_LIBRARY_PATH=$NETCDFF/lib:$NETCDF_C/lib:$EBROOTJASPER/lib:$EBROOTJASPER/lib64:${LD_LIBRARY_PATH:-} && ' \
+               'export NETCDF=$NETCDFF NETCDF_DIR=$NETCDFF && ' \
+               'export JASPERLIB=$EBROOTJASPER/lib JASPERINC=$EBROOTJASPER/include && ' \
+               'export WRF_EXTRA_LIBS="-lnetcdff -lnetcdf -ljasper -lpng -lz" && '
+
+# =========================================================================
+# MANDATORY INSTALL OPTIONS (Fixes EasyBuild RPATH and Non-existing bin/ bug)
+# =========================================================================
+# Obligamos a EasyBuild a crear la carpeta bin/ y estructurar los ejecutables
+# para que el RPATH Sanity Check de EESSI los localice de forma estándar.
+installopts = 'mkdir -p %(installdir)s/bin && ' \
+              'cp %(builddir)s/WPS-%(version)s/*.exe %(installdir)s/bin/ 2>/dev/null || ' \
+              'cp %(installdir)s/*.exe %(installdir)s/bin/ 2>/dev/null || true && ' \
+              'cp %(installdir)s/util/src/*.exe %(installdir)s/bin/ 2>/dev/null || true && ' \
+              'cp -r util %(installdir)s/'
+
+# =========================================================================
+# RIGOROUS GENERIC SANITY CHECK PATHS
+# =========================================================================
+# cleanup_builddir = False
+sanity_check_paths = {
+    'files': ['bin/geogrid.exe', 'bin/metgrid.exe', 'bin/ungrib.exe'],
+    'dirs': ['util']
+}
+
 moduleclass = 'geo'
 
-local_src_folder = "WPS-{{ wps_git_tag.lstrip('v') }}"
-sanity_check_paths = {
-    'files': [
-        '%s/geogrid.exe' % local_src_folder,
-        '%s/metgrid.exe' % local_src_folder,
-        '%s/ungrib.exe' % local_src_folder
-    ],
-    'dirs': ['%s/util' % local_src_folder]
-}
