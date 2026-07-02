@@ -1,8 +1,8 @@
-# WPS Compilation Workflow over EESSI with Snakemake
+# WRF & WPS Automated Deployment over EESSI with Snakemake
 
-This repository provides a **Snakemake** workflow designed to compile the **WRF Pre-processing System (WPS)** directly on top of the **EESSI** (European Environment for Scientific Software Installations) shared stack via CVMFS.
+This repository provides a **Snakemake** workflow designed to compile both the **Weather Research and Forecasting (WRF) Model** and the **WRF Pre-processing System (WPS)** directly on top of the **EESSI (European Environment for Scientific Software Installations)** shared stack via CVMFS.
 
-By leveraging the optimized MPI/NetCDF/WRF stack pre-built by EESSI, this workflow eliminates the need to compile the core WRF model from scratch. Instead, it natively automates the local download and tracking of required GRIB2 libraries (Jasper), clones the official WPS repository, and triggers target-specific compilation steps with comprehensive **physical file-based checkpoint tracking**.
+By leveraging optimized host-injection toolchains (such as foss/2024a), this workflow dynamically audits the centralized EESSI environment to determine whether to utilize official distributed EasyConfigs or seamlessly inject local fallbacks.
 
 ---
 
@@ -40,9 +40,8 @@ This workflow complies with the **Snakemake Workflow Standard**, separating work
 
 ```text
 snakemake-wps-eessi/
-├── .gitignore               # Excludes logs, build temporaries, and custom profiles
-├── README.md                # This infrastructure deployment guide
 ├── pixi.toml                # Project task and software package configuration
+├── pixi.lock                # Pixi dependency tracking for increased reproducibility
 ├── config/
 │   ├── config.yaml          # Target WPS version and CVMFS system paths
 │   ├── README.md            # Slurm cluster credential discovery guide
@@ -52,74 +51,31 @@ snakemake-wps-eessi/
 └── workflow/
     └── Snakefile            # Granular rule execution dependency graph (DAG)
     └── audit_eessi.sh       # EESSI + EasyBuild: audits EESSI environment to decide whether compile from official EB config & patches (EESSI_OFFICIAL) or local (FALLBACK_LOCAL)
+    └── compile_eb.sh       # EESSI + EasyBuild: audits EESSI environment to decide whether compile from official EB config & patches (EESSI_OFFICIAL) or local (FALLBACK_LOCAL)
 ```
 
 ---
 
-## Workflow explanation
+## Workflow Engine & Execution Stages
 
-### Step 1: EESSI environment audit (`workflow/audit_eessi.sh`)
-- If status is `EESSI_OFFICIAL`: EasyBuild uses native recipe (WPS-4.6.0-foss-2024a-dmpar.eb).
-- If status is `FALLBACK_LOCAL`: EasyBuild uses local configuration file and (if any) associated patches (from `./config`).
+The workflow constructs a 2-stage execution matrix:
 
-The script creates a JSON file with the required information to be processed by the subsequent script.
+1. **Auditing (`workflow/audit_eessi.sh`)**: Interrogates CVMFS to determine if the build uses `EESSI_OFFICIAL` or `FALLBACK_LOCAL` resources.
+2. **Compilation (`workflow/compile_eb.sh`)**: Executes EasyBuild.
 
-### Step 2: Compilation (`workflow/compile_eb.sh`)
-Runs EasyBuild in accordance with the JSON data resulting from the audit phase.
+### HPC Runtime Enforcements
 
-Notes:
-- Variables `*_NUM_THREADS=1`: required for Snakemake
-    - Unlike a EasyBuild compilation within the shell, where EasyBuild reads `toolchainopts = {'opt': True}` directive and configures natively the right number of threads, Snakemake might allow OpenBLAS, FlexiBLAS o MKL to use as many threads as logic cores AMD Zen3 processor has available, thus causing oversubscription &rarr; **TO CHECK** 
-- `ulimit -s unlimited` allows Snakemake processes that use clean sub-shell to potentially avoid low stack size values.
+- **Thread Control (`*_NUM_THREADS=1`)**: inhibits unmanaged thread spawning for math libraries.
+- **Stack Memory `(ulimit -s unlimited`)**: protects against segmentation faults.
 
 
-## Execution & Deployment Guide (**OLD**)
+## Execution Guide
 
-### 1. Match your Target EESSI Mount Paths
-Open `config/config.yaml` and verify that the CVMFS initialization path and targeted WRF folder match the architecture of your specific HPC cluster:
-```yaml
-# config/config.yaml
-wps_version: "v4.6.0"
-wps_configure_option: "3" # Option for Linux x86_64, foss toolchain (GRIB2 enabled)
-install_root: "/home/user/sw" # Destination path for the local Jasper installation
-eessi_init_script: "/cvmfs/software.eessi.io/versions/2025.06/init/bash"
-eessi_wrf_module: "WRF/4.6.1-foss-2024a-dmpar"
-eessi_wrf_dir: "/cvmfs/software.eessi.io/versions/2025.06/software/linux/x86_64/intel/cascadelake/software/WRF/4.6.1-foss-2024a-dmpar/WRFV4.6.1"
-```
-
-### 2. Instantiate Your Private Cluster Profile
-To prevent Git from tracking or uploading your private resource usage accounts, copy the cluster profile template folder into a custom deployment tag (e.g., `altamira_cluster`):
-```bash
-cp -r config/profiles/template_slurm config/profiles/altamira_cluster
-```
-*Note: Any custom profile folder underneath `config/profiles/` except `template_slurm` is automatically blacklisted by the `.gitignore` rule.*
-
-Open `config/profiles/altamira_cluster/config.yaml` and modify the `<YOUR_SLURM_PARTITION>` and `<YOUR_SLURM_ACCOUNT>` fields using the discovery guidelines outlined in `config/README.md`.
-
-### 3. Run a Dry-Run Graph Check
-Simulate the workflow layout on your login node to guarantee Slurm parameters are parsed correctly:
-```bash
-pixi run dry-run config/profiles/altamira_cluster
-```
-
-### 4. Submit to Production Compute Queues
-
-*   **To orchestrate individual step submission through your Slurm scheduling daemon:**
-    ```bash
-    pixi run run-slurm config/profiles/altamira_cluster
-    ```
-*   **To compile locally if working within a pre-allocated interactive resource node (`salloc` space):**
-    ```bash
-    pixi run run-local --cores 8
-    ```
-
----
-
-## Compilation Stages
-
-Snakemake will construct a Direct Acyclic Graph (DAG) split into 4 decoupled rule targets:
-
-1.  **`install_jasper`**: Downloads, configures, and isolates a static `libjasper.a` library build in your user space.
-2.  **`clone_wps`**: Clones and checks out the specific tag reference of the official UCAR WPS codebase.
-3.  **`configure_wps`**: sources EESSI CVMFS sub-shells on-the-fly, matches variables with the static WRF libraries, and outputs a valid `configure.wps` target file.
-4.  **`compile_wps`**: Safely locks the maximum memory allocation bugs of underlying linear algebra dependencies (`export OPENBLAS_NUM_THREADS=1`) and compiles the definitive target binaries: `geogrid.exe`, `ungrib.exe`, and `metgrid.exe`.
+**1. Configure CVMFS & Versions**
+Edit `config/config.yaml` to define your CVMFS init script, toolchain, and software versions.
+**2. Customize Slurm Profiles**
+Copy `config/profiles/template_slurm` to a new directory and update your cluster account/partition details.
+**3. Execute**
+    - **Dry-run**: `pixi run dry-run config/profiles/<your-profile>`
+    - **Run on Slurm**: `pixi run run-slurm config/profiles/<your-profile>`
+    - **Run Local (Interactive)**: `pixi run run-local --cores 8`
