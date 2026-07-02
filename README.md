@@ -72,10 +72,14 @@ The workflow constructs a 2-stage execution matrix:
 ## Execution Guide
 
 **1. Configure CVMFS & Versions**
+
 Edit `config/config.yaml` to define your CVMFS init script, toolchain, and software versions.
+
 **2. Customize Slurm Profiles**
+
 Copy `config/profiles/template_slurm` to a new directory and update your cluster account/partition details.
+
 **3. Execute**
-    - **Dry-run**: `pixi run dry-run config/profiles/<your-profile>`
-    - **Run on Slurm**: `pixi run run-slurm config/profiles/<your-profile>`
-    - **Run Local (Interactive)**: `pixi run run-local --cores 8`
+- **Dry-run**: `pixi run dry-run config/profiles/<your-profile>`
+- **Run on Slurm**: `pixi run run-slurm config/profiles/<your-profile>`
+- **Run Local (Interactive)**: `pixi run run-local --cores 8`
