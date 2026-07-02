@@ -14,7 +14,7 @@ rule all:
         "bin/wrf.exe"
 
 # =========================================================================
-# REGLA 1: Auditoría Dinámica del Estado Central de EESSI via eb -S
+# RULE 1: Dynamic Discovery of Central EESSI Repository State via eb -S
 # =========================================================================
 rule audit_eessi_status:
     output:
@@ -35,20 +35,20 @@ rule audit_eessi_status:
         """
 
 # =========================================================================
-# REGLA 2: Compilación Inteligente y Generación de Links Locales Planos
+# RULE 2: Intelligent Compilation and Dynamic Local Symlink Generation
 # =========================================================================
 rule compile_software_via_eb:
     input:
-        # Usamos strings fijos en lugar de funciones lambda para que Snakemake no se confunda
+        # Static file constraints preventing Python-to-Snakemake wildcard collisions
         wps_json = "audit/WPS_status.json",
         wrf_json = "audit/WRF_status.json"
     output:
+        # Real victory condition: exact binary path mapped locally inside the repository
         real_binary = "bin/{executable}.exe"
     wildcard_constraints:
         executable = "ungrib|wrf"
     params:
         eessi_init   = EESSI_INIT,
-        # Renombramos la clave a 'sw_name' para evitar el conflicto de Wildcard
         sw_name      = lambda wildcards: "WPS" if wildcards.executable == "ungrib" else "WRF",
         local_recipe = lambda wildcards: os.path.abspath(f"config/{'WPS' if wildcards.executable == 'ungrib' else 'WRF'}-{WPS_VER if wildcards.executable == 'ungrib' else WRF_VER}{TC_SUFFIX}.eb"),
         marker_dir   = os.path.abspath("bin"),
@@ -56,7 +56,7 @@ rule compile_software_via_eb:
     threads: 8
     shell:
         """
-        # Pasamos dinámicamente si la regla activa WPS o WRF leyendo el JSON correcto
+        # Dynamically inject the appropriate JSON metadata footprint into the compiler
         STATUS_JSON="audit/WPS_status.json"
         if [ "{wildcards.executable}" == "wrf" ]; then
             STATUS_JSON="audit/WRF_status.json"
