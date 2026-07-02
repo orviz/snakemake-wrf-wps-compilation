@@ -1,61 +1,60 @@
 # workflow/Snakefile
 import os
-import hashlib
 
 configfile: "config/config.yaml"
 
-# --- 1. VALIDACIÓN ESTRICTA ---
-required_keys = ["wps_git_repo", "wps_version", "wps_git_sha256", "eessi_init_script"]
-for key in required_keys:
-    if key not in config or not config[key]:
-        raise KeyError(f"\n❌ [Snakemake Error]: Falta '{key}' en config.yaml.\n")
-
-WPS_REPO    = config["wps_git_repo"]
-WPS_VERSION = config["wps_version"]  
-WPS_SHA256  = config["wps_git_sha256"]
 EESSI_INIT  = config["eessi_init_script"]
+WPS_VER     = config["wps_version"]
+WRF_VER     = config["wrf_version"]
+TC_SUFFIX   = config["toolchain_suffix"]
 
 rule all:
     input:
-        "bin/wps_compilation.done"
+        "bin/WPS_compilation.done",
+        "bin/WRF_compilation.done"
 
 # =========================================================================
-# REGLA ÚNICA: Control de ciclo de vida desacoplado mediante script
+# REGLA 1: Auditoría Dinámica del Estado Central de EESSI via eb -S
 # =========================================================================
-rule compile_wps_hpc:
+rule audit_eessi_status:
     output:
-        tarball = f"sources/WPS-{WPS_VERSION}.tar.gz",
-        marker  = "bin/wps_compilation.done"
+        json_report = "audit/{software}_status.json"
     params:
-        url        = f"{WPS_REPO}/archive/refs/tags/{WPS_VERSION}.tar.gz",
-        sha256     = WPS_SHA256,
-        target_dir = os.path.abspath(f"software/WPS-{WPS_VERSION}"),
-        marker_abs = os.path.abspath("bin/wps_compilation.done"),
-        marker_dir = os.path.abspath("bin"),
-        eessi_init = EESSI_INIT
+        eessi_init = EESSI_INIT,
+        version    = lambda wildcards: WPS_VER if wildcards.software == "WPS" else WRF_VER,
+        tc_suffix  = TC_SUFFIX
+    threads: 1
+    shell:
+        """
+        workflow/audit_eessi.sh \
+            '{params.eessi_init}' \
+            '{wildcards.software}' \
+            '{params.version}' \
+            '{params.tc_suffix}' \
+            '{output.json_report}'
+        """
+
+# =========================================================================
+# REGLA 2: Compilación Inteligente Automática (Modo Oficial / Fallback Local)
+# =========================================================================
+rule compile_software_via_eb:
+    input:
+        status_json = "audit/{software}_status.json"
+    output:
+        marker = "bin/{software}_compilation.done"
+    params:
+        eessi_init = EESSI_INIT,
+        # Ruta de la receta local de contingencia en tu carpeta config/ por si hiciera falta
+        local_recipe = lambda wildcards: os.path.abspath(f"config/{wildcards.software}-{WPS_VER if wildcards.software == 'WPS' else WRF_VER}{TC_SUFFIX}.eb"),
+        marker_dir   = os.path.abspath("bin"),
+        marker_abs   = lambda wildcards, output: os.path.abspath(output.marker)
     threads: 8
-    run:
-        # --- ETAPA A: DESCARGA NATIVA ---
-        print(f"[Snakemake] Downloading official Tarball upstream: {params.url}")
-        os.makedirs("sources", exist_ok=True)
-        shell(f"wget -q -O {output.tarball} {params.url}")
-        
-        # --- ETAPA B: VALIDACIÓN ESTRICTA SHA256 DE SEGURIDAD ---
-        print("[Snakemake] Verifying SHA256 checksum...")
-        sha256_hash = hashlib.sha256()
-        with open(output.tarball, "rb") as f:
-            for byte_block in iter(lambda: f.read(4096), b""):
-                sha256_hash.update(byte_block)
-        computed_sha = sha256_hash.hexdigest()
-        
-        if computed_sha != params.sha256:
-            raise ValueError(f"\n❌ [Security Error]: Checksum Mismatch!\n")
-        print(" [OK] Checksum verified successfully!")
-        
-        # --- ETAPA C: DESCOMPRESIÓN Y DELEGACIÓN EN SCRIPT ---
-        print(f"[Snakemake] Unpacking source code into local environment...")
-        os.makedirs(params.target_dir, exist_ok=True)
-        shell(f"tar -xzf {output.tarball} --strip-components=1 -C {params.target_dir}")
-        
-        print("[Snakemake] Launching decoupled compilation script...")
-        shell(f"workflow/compile_wps.sh '{params.eessi_init}' '{params.target_dir}' '{params.marker_dir}' '{params.marker_abs}'")
+    shell:
+        """
+        workflow/compile_eb.sh \
+            '{params.eessi_init}' \
+            '{input.status_json}' \
+            '{params.local_recipe}' \
+            '{params.marker_dir}' \
+            '{params.marker_abs}'
+        """

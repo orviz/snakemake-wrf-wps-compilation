@@ -1,8 +1,7 @@
 # config/config.yaml
 eessi_init_script: "/cvmfs/software.eessi.io/versions/2025.06/init/bash"
-wps_easyconfig_path: "config/WPS-custom.eb.j2"
 
-# Parámetros genéricos de descarga y verificación
-wps_git_repo: "https://github.com/wrf-model/WPS"
-wps_version: "v4.6.0"
-wps_git_sha256: "ca7bbfc6c28a107c6eb00ded70e693f5c9a3926ecde7656f49e306c9eb9a309b"
+toolchain_suffix: "-foss-2024a-dmpar"
+
+wps_version: "4.6.0"
+wrf_version: "4.6.1"
