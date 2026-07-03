@@ -26,7 +26,7 @@ rule audit_eessi_status:
     threads: 1
     shell:
         """
-        workflow/audit_eessi.sh \
+        workflow/scripts/audit.sh \
             '{params.eessi_init}' \
             '{wildcards.software}' \
             '{params.version}' \
@@ -62,7 +62,7 @@ rule compile_software_via_eb:
             STATUS_JSON="audit/WRF_status.json"
         fi
 
-        workflow/compile_eb.sh \
+        workflow/scripts/compile.sh \
             '{params.eessi_init}' \
             "$STATUS_JSON" \
             '{params.local_recipe}' \

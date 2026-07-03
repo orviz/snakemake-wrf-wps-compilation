@@ -50,8 +50,9 @@ snakemake-wps-eessi/
 │           └── config.yaml
 └── workflow/
     └── Snakefile            # Granular rule execution dependency graph (DAG)
-    └── audit_eessi.sh       # EESSI + EasyBuild: audits EESSI environment to decide whether compile from official EB config & patches (EESSI_OFFICIAL) or local (FALLBACK_LOCAL)
-    └── compile_eb.sh       # EESSI + EasyBuild: audits EESSI environment to decide whether compile from official EB config & patches (EESSI_OFFICIAL) or local (FALLBACK_LOCAL)
+    └── scripts/
+        └── audit.sh         # Audits EESSI environment to decide whether compile from official EasyBuild config & patches (EESSI_OFFICIAL) or local (FALLBACK_LOCAL)
+        └── compile.sh       # WRF + WPS compilation
 ```
 
 ---
@@ -60,8 +61,8 @@ snakemake-wps-eessi/
 
 The workflow constructs a 2-stage execution matrix:
 
-1. **Auditing (`workflow/audit_eessi.sh`)**: Interrogates CVMFS to determine if the build uses `EESSI_OFFICIAL` or `FALLBACK_LOCAL` resources.
-2. **Compilation (`workflow/compile_eb.sh`)**: Executes EasyBuild.
+1. **Auditing (`workflow/audit.sh`)**: Interrogates CVMFS to determine if the build uses `EESSI_OFFICIAL` or `FALLBACK_LOCAL` resources.
+2. **Compilation (`workflow/compile.sh`)**: Compiles WRF and WPS through EasyBuild.
 
 ### HPC Runtime Enforcements
 

@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# workflow/audit_eessi.sh
+# workflow/scripts/audit.sh
 set -euo pipefail
 
 # 1. Parámetros de entrada de Snakemake

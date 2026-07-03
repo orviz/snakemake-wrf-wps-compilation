@@ -1,5 +1,5 @@
 #!/usr/bin/bash
-# workflow/compile_eb.sh
+# workflow/scripts/compile.sh
 set -euo pipefail
 
 # =========================================================================
