@@ -1,9 +1,16 @@
-.snakemake/
-.pixi/
-logs/
-results/
+# =========================================================================
+# SNAKEMAKE & EASYBUILD AUTOMATED PIPELINE METADATA (Local fallbacks)
+# =========================================================================
 
-# --- Slurm Private Profiles ---
-# Ignore all custom profiles but keep the template folder visible in Git
-config/profiles/*
-!config/profiles/template_slurm/
+# Snakemake internal database, lockfiles, and rule logs
+.snakemake/
+
+# Dynamic EESSI database discovery footprints via eb -S (Cluster-dependent JSONs)
+audit/
+
+# Local target binary directory hosting deployment symlinks
+bin/
+
+# Temporary data downloads, tarballs, and runtime outputs
+data/
+logs/
