@@ -2,7 +2,18 @@
 
 This repository provides a **Snakemake** workflow designed to compile both the **Weather Research and Forecasting (WRF) Model** and the **WRF Pre-processing System (WPS)** directly on top of the **EESSI (European Environment for Scientific Software Installations)** shared stack via CVMFS.
 
-By leveraging optimized host-injection toolchains (such as foss/2024a), this workflow dynamically audits the centralized EESSI environment to determine whether to utilize official distributed EasyConfigs or seamlessly inject local fallbacks.
+By leveraging optimized host-injection toolchains (such as `foss/2024a`), this workflow dynamically audits the centralized EESSI environment to determine whether to utilize official distributed EasyConfigs or seamlessly inject local fallbacks.
+
+---
+
+## Dual WRF and WPS Software Compilation
+
+The architecture of the `Snakefile` is designed to process **both WRF and WPS simultaneously** using Snakemake wildcards and parallel directed acyclic graphs (DAGs). 
+
+Instead of treating them as separate monolithic blocks, a single command executes a unified pipeline:
+1. **Dual Discovery**: It forks two parallel auditing processes to independently check the CVMFS status for both `WPS` (v4.6.0) and `WRF` (v4.6.1).
+2. **Independent Fallbacks**: If EESSI contains one software but lacks the other, the workflow uses the official centralized build for the former while triggering a local recipe fallback (`.eb` + patches) exclusively for the latter.
+3. **Unified Success Condition**: The pipeline maps and tracks the actual physical compilation outputs, establishing functional local symlinks (`bin/ungrib.exe` and `bin/wrf.exe`) inside your repository directory.
 
 ---
 
