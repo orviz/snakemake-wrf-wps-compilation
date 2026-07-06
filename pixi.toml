@@ -1,9 +1,9 @@
 [workspace]
-name = "snakemake-wps-eessi"
-version = "0.1.0"
-description = "Workflow to compile WPS over EESSI using Snakemake"
+name = "snakemake-wrf-wps-compilation"
+version = "0.3.1"
+description = "Snakemake workflow to compile WRF/WPS over EESSI using EasyBuild"
 authors = ["Pablo Orviz <orviz@ifca.es>", "Valvanuz Fernández <valvanuz.fernandez@unican.es"]
-channels = ["conda-forge", "bioconda"] # Specific channels for HPC
+channels = ["conda-forge", "bioconda"]
 platforms = ["linux-64"]
 
 [dependencies]
