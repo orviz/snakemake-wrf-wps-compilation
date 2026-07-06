@@ -80,18 +80,73 @@ The workflow constructs a 2-stage execution matrix:
 - **Thread Control (`*_NUM_THREADS=1`)**: inhibits unmanaged thread spawning for math libraries.
 - **Stack Memory `(ulimit -s unlimited`)**: protects against segmentation faults.
 
-
 ## Execution Guide
 
-**1. Configure CVMFS & Versions**
+### 1. Configure CVMFS & Versions
 
 Edit `config/config.yaml` to define your CVMFS init script, toolchain, and software versions.
 
-**2. Customize Slurm Profiles**
+### 2. Workflow Execution
 
-Copy `config/profiles/template_slurm` to a new directory and update your cluster account/partition details.
+The workflow can be executed locally or on the Cloud as follows:
 
-**3. Execute**
-- **Dry-run**: `pixi run dry-run config/profiles/<your-profile>`
-- **Run on Slurm**: `pixi run run-slurm config/profiles/<your-profile>`
-- **Run Local (Interactive)**: `pixi run run-local --cores 8`
+```bash
+# Dry run to preview the execution plan
+pixi run dry-run
+
+# Execute locally using default cores
+pixi run run-local
+
+# Execute locally passing custom Snakemake arguments
+pixi run run-local --cores 4
+```
+
+Within HPC, it is recommended to leverage Snakemake profiles. This module relies on Git Worktrees to decouple workflow logic from the specific HPC-related configuration.
+
+**1. Embed the HPC profile**
+
+The available Snakemake profiles are maintained in the `hpc-profiles` branch. For instance, in order to initialize Altamira cluster profile configuration:
+
+```bash
+git worktree add config/profiles hpc-profiles
+```
+
+The command above will populate `config/profiles/` with the available cluster configurations (e.g., altamira/), each containing its own Slurm presets and a `set_env.sh` file.
+
+**2. Launch the Simulation**
+
+To execute the workflow, use the unified Pixi's `hpc-profile` task. Pass the name of the HPC profile as the first argument, followed by any optional Snakemake flags:
+
+```bash
+# Standard execution on Altamira
+pixi run hpc-profile altamira
+
+# Dry-run execution on Altamira
+pixi run hpc-profile altamira --dry-run
+
+# Execution limiting concurrent Slurm jobs
+pixi run hpc-profile altamira --jobs 15
+```
+
+## Working with Snakemake Profiles (Git Worktree)
+
+Once the Git Worktree is set up, any update in the configuration of any HPC profile will work as follows:
+
+- **Download configuration updates:**
+
+```bash
+cd config/profiles/altamira
+git pull origin hpc-profiles
+```
+
+- **Upload configuration changes:**
+
+```bash
+cd config/profiles/altamira
+# E.g. modify config.yaml...
+git add config.yaml
+git commit -m "Increase memory limits for WRF simulation"
+git push origin hpc-profiles
+```
+
+To **create a new profile**, copy and modify appropiately the `config/profiles/template_slurm` template, and finally, add it to the `hpc-profiles` branch. 
