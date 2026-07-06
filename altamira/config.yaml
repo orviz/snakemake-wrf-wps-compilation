@@ -1,0 +1,14 @@
+executor: slurm
+
+default-resources:
+  slurm_partition: "wncompute_ifca"
+  runtime: 60
+  mem_mb: 32000
+
+
+# Snakemake orchestrator pacing parameters
+jobs: 100                       # Maximum number of parallel jobs to submit to Slurm
+restart-times: 1                # Auto-retry failed cluster jobs once (e.g., node eviction)
+max-jobs-per-second: 2          # Prevents throttling the Slurm controller API
+max-status-checks-per-second: 10
+local-cores: 1
