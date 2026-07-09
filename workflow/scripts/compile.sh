@@ -10,11 +10,11 @@ STATUS_JSON="$2"
 LOCAL_RECIPE_PATH="$3"
 MARKER_DIR="$4"
 MARKER_ABS_PATH="$5"
+NUM_THREADS="$6"
 
 # =========================================================================
 # 2. DYNAMIC METADATA EXTRACTION FROM JSON (HPC-Safe using Python)
 # =========================================================================
-# Extract status, software name, and target recipe natively from the JSON report
 STATUS=$(python3 -c "import json; print(json.load(open('$STATUS_JSON'))['status'])")
 RECIPE_TARGET=$(python3 -c "import json; print(json.load(open('$STATUS_JSON'))['recipe_target'])")
 SOFTWARE_NAME=$(python3 -c "import json; print(json.load(open('$STATUS_JSON'))['software'])")
@@ -28,6 +28,7 @@ module load EESSI-extend
 set -u
 
 # Core threading and memory mitigation flags for subprocess scheduling
+export EASYBUILD_PARALLEL="$NUM_THREADS"
 export OPENBLAS_NUM_THREADS=1
 export FLEXIBLAS_NUM_THREADS=1
 export MKL_NUM_THREADS=1
@@ -38,32 +39,33 @@ ulimit -s unlimited
 # =========================================================================
 if [ "$STATUS" == "EESSI_OFFICIAL" ]; then
     echo "[Compiler] Tuning to OFFICIAL mode. Using EESSI native recipe: $RECIPE_TARGET"
-    
+
     eb "$RECIPE_TARGET" \
       --robot \
       --local-var-naming-check=warn \
       --skip-test-step \
       --detect-loaded-modules=purge \
+      --rebuild \
       --force
 else
     echo "[Compiler] Tuning to LOCAL FALLBACK mode. Injecting custom recipe and patches..."
     PATCH_DIR=$(dirname "$LOCAL_RECIPE_PATH")
-    
+
     eb "$LOCAL_RECIPE_PATH" \
       --robot \
       --local-var-naming-check=warn \
       --skip-test-step \
       --detect-loaded-modules=purge \
       --ignore-checksums \
+      --rebuild \
       --patches-path="$PATCH_DIR" \
       --force
 fi
 
 # =========================================================================
-# 5. DYNAMIC DISCOVERY OF THE ACTUAL INSTALLATION PATH (Option 1)
+# 5. DYNAMIC DISCOVERY OF THE ACTUAL INSTALLATION PATH
 # =========================================================================
-# Rely on EasyBuild native environment variable to resolve the target destination prefix
-INSTALL_PATH="${EASYBUILD_INSTALLPATH:-$HOME/eessi/versions/2025.06/software/linux/x86_64}"
+INSTALL_PATH="${EASYBUILD_INSTALLPATH:-$HOME/eessi/versions/2025.06/software}"
 
 echo "[Compiler] Scanning for real binary assets within dynamic path: $INSTALL_PATH"
 

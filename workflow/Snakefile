@@ -45,27 +45,26 @@ rule compile_software_via_eb:
     output:
         # Real victory condition: exact binary path mapped locally inside the repository
         real_binary = "bin/{executable}.exe"
+    log:
+        "logs/compile_{executable}.log"
     wildcard_constraints:
         executable = "ungrib|wrf"
     params:
         eessi_init   = EESSI_INIT,
-        sw_name      = lambda wildcards: "WPS" if wildcards.executable == "ungrib" else "WRF",
+        status_json  = lambda wildcards: "audit/WRF_status.json" if wildcards.executable == "wrf" else "audit/WPS_status.json",
         local_recipe = lambda wildcards: os.path.abspath(f"config/{'WPS' if wildcards.executable == 'ungrib' else 'WRF'}-{WPS_VER if wildcards.executable == 'ungrib' else WRF_VER}{TC_SUFFIX}.eb"),
         marker_dir   = os.path.abspath("bin"),
         marker_abs   = lambda wildcards, output: os.path.abspath(output.real_binary)
     threads: 8
     shell:
         """
-        # Dynamically inject the appropriate JSON metadata footprint into the compiler
-        STATUS_JSON="audit/WPS_status.json"
-        if [ "{wildcards.executable}" == "wrf" ]; then
-            STATUS_JSON="audit/WRF_status.json"
-        fi
+        set -x
 
         workflow/scripts/compile.sh \
             '{params.eessi_init}' \
-            "$STATUS_JSON" \
+            '{params.status_json}' \
             '{params.local_recipe}' \
             '{params.marker_dir}' \
-            '{params.marker_abs}'
+            '{params.marker_abs}' \
+            '{threads}'
         """

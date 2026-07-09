@@ -2,37 +2,44 @@
 # workflow/scripts/audit.sh
 set -euo pipefail
 
-# 1. Parámetros de entrada de Snakemake
+# =========================================================================
+# 1. PARSE SNAKEMAKE INPUT PARAMETERS
+# =========================================================================
 EESSI_INIT_SCRIPT="$1"
-SOFTWARE_NAME="$2"      # Ej: "WPS" o "WRF"
-SOFTWARE_VERSION="$3"   # Ej: "4.6.0" o "4.6.1"
-TOOLCHAIN_SUFIX="$4"    # Ej: "-foss-2024a-dmpar"
+SOFTWARE_NAME="$2"
+SOFTWARE_VERSION="$3"
+TOOLCHAIN_SUFIX="$4"
 OUTPUT_JSON="$5"
 
-# 2. Inicialización aislada y estéril de la pila de EESSI
+# =========================================================================
+# 2. STERILE AND SAFE INITIALIZATION OF THE EESSI STACK
+# =========================================================================
 set +u
 source "$EESSI_INIT_SCRIPT"
 module load EESSI-extend
 set -u
 
-echo "[Auditor EESSI] Interrogando al repositorio central para $SOFTWARE_NAME v$SOFTWARE_VERSION..."
+echo "[Auditor EESSI] Interrogating central infrastructure for $SOFTWARE_NAME v$SOFTWARE_VERSION..."
 
-# Nombre exacto de la receta oficial que debería estar en CVMFS
 TARGET_RECIPE="${SOFTWARE_NAME}-${SOFTWARE_VERSION}${TOOLCHAIN_SUFIX}.eb"
 
-# Ejecutamos eb -S capturando la salida y forzando la limpieza de módulos para que no colapse
+# Capture & analyze 'eb -S' output
 EB_SEARCH_OUT=$(eb -S "$SOFTWARE_NAME" --detect-loaded-modules=purge 2>&1 || true)
 
-# 3. Analizamos de forma empírica si la receta buscada aparece en el índice de CVMFS
+# =========================================================================
+# 3. EMPIRICAL ANALYSIS OF CVMFS INDEX
+# =========================================================================
 if echo "$EB_SEARCH_OUT" | grep -q "$TARGET_RECIPE"; then
-    echo " -> [FOUND] La receta oficial '$TARGET_RECIPE' SÍ está integrada en EESSI."
+    echo " -> [FOUND] Oficial EasyBuild recipe '$TARGET_RECIPE' available in EESSI."
     STATUS="EESSI_OFFICIAL"
 else
-    echo " -> [NOT FOUND] La receta '$TARGET_RECIPE' NO existe en EESSI. Se requerirá fallback local."
+    echo " -> [NOT FOUND] Official EasyBuild recipe '$TARGET_RECIPE' NOT available in EESSI. Fallback to local."
     STATUS="FALLBACK_LOCAL"
 fi
 
-# 4. Escribimos el resultado en un JSON estructurado para que Snakemake lo lea nativamente
+# =========================================================================
+# 4. WRITE STRUCTURED JSON METADATA FOOTPRINT
+# =========================================================================
 mkdir -p "$(dirname "$OUTPUT_JSON")"
 cat << EOF > "$OUTPUT_JSON"
 {
@@ -44,4 +51,4 @@ cat << EOF > "$OUTPUT_JSON"
 }
 EOF
 
-echo "[Auditor EESSI] Diagnóstico consolidado con éxito en: $OUTPUT_JSON"
+echo "[EESSI Audit] Diagnostic available in $OUTPUT_JSON"
