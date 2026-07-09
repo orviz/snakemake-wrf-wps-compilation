@@ -41,7 +41,9 @@ rule compile_software_via_eb:
     input:
         # Static file constraints preventing Python-to-Snakemake wildcard collisions
         wps_json = "audit/WPS_status.json",
-        wrf_json = "audit/WRF_status.json"
+        wrf_json = "audit/WRF_status.json",
+        # WRF compilation first
+        wrf_ready = lambda wildcards: "bin/wrf.exe" if wildcards.executable == "ungrib" else []
     output:
         # Real victory condition: exact binary path mapped locally inside the repository
         real_binary = "bin/{executable}.exe"
