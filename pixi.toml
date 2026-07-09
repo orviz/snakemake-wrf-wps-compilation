@@ -23,4 +23,4 @@ run-local = "snakemake --cores 1"
 # Generic Slurm
 run-slurm = "snakemake --profile"
 # HPC profiles
-hpc-profile = "PROFILE=$1; PROFILE_DIR=\"config/profiles/$PROFILE\"; ENV_SCRIPT=\"$PROFILE_DIR/set_env.sh\"; if [ -d \"$PROFILE_DIR\" ]; then if [ -f \"$ENV_SCRIPT\" ]; then source \"$ENV_SCRIPT\"; fi && snakemake --profile \"$PROFILE_DIR\" \"${@:2}\"; else echo \"Error: HPC profile'$PROFILE' not found under config/profiles/\"; exit 1; fi"
+hpc-profile = "PROFILE=$1; PROFILE_DIR=\"config/profiles/$PROFILE\"; ENV_SCRIPT=\"$PROFILE_DIR/set-env.sh\"; if [ -d \"$PROFILE_DIR\" ]; then if [ -f \"$ENV_SCRIPT\" ]; then source \"$ENV_SCRIPT\"; fi && snakemake --profile \"$PROFILE_DIR\" \"${@:2}\"; else echo \"Error: HPC profile'$PROFILE' not found under config/profiles/\"; exit 1; fi"
