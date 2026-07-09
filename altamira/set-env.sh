@@ -21,3 +21,4 @@ if [ -n "${SLURM_JOB_ID:-}" ]; then
     
     # 5. Forzar comportamiento interactivo limpio para Lmod
     export LMOD_REDIRECT=yes
+fi
