@@ -1,4 +1,4 @@
-# workflow/Snakefile
+# workflow/Snakefile (Módulo de compilación - Corregido para 0.4.0-alpha3)
 import os
 
 configfile: "config/config.yaml"
@@ -7,6 +7,7 @@ EESSI_INIT  = config["eessi_init_script"]
 WPS_VER     = config["wps_version"]
 WRF_VER     = config["wrf_version"]
 TC_SUFFIX   = config["toolchain_suffix"]
+
 WPS_BIN_DIR = config.get("wps_bin_dir", "bin")
 WRF_BIN_DIR = config.get("wrf_bin_dir", "bin")
 
@@ -45,17 +46,17 @@ rule compile_software_via_eb:
         wrf_json = "audit/WRF_status.json",
         wrf_ready = lambda wildcards: f"{WRF_BIN_DIR}/wrf.exe" if wildcards.executable == "ungrib" else []
     output:
-        real_binary = lambda wildcards: f"{WRF_BIN_DIR}/wrf.exe" if wildcards.executable == "wrf" else f"{WPS_BIN_DIR}/ungrib.exe"
+        real_binary = "{path}/{executable}.exe"
     log:
         "logs/compile_{executable}.log"
     wildcard_constraints:
-        executable = "ungrib|wrf"
+        executable = "ungrib|wrf",
+        path = ".*"
     params:
         eessi_init   = EESSI_INIT,
         status_json  = lambda wildcards: "audit/WRF_status.json" if wildcards.executable == "wrf" else "audit/WPS_status.json",
         local_recipe = lambda wildcards: os.path.abspath(f"config/{'WPS' if wildcards.executable == 'ungrib' else 'WRF'}-{WPS_VER if wildcards.executable == 'ungrib' else WRF_VER}{TC_SUFFIX}.eb"),
-        # El directorio marcador se calcula según corresponda a cada herramienta
-        marker_dir   = lambda wildcards: os.path.abspath(WRF_BIN_DIR) if wildcards.executable == "wrf" else os.path.abspath(WPS_BIN_DIR),
+        marker_dir   = lambda wildcards, output: os.path.abspath(os.path.dirname(output.real_binary)),
         marker_abs   = lambda wildcards, output: os.path.abspath(output.real_binary)
     threads: 8
     shell:
