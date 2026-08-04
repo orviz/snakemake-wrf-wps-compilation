@@ -48,10 +48,10 @@ rule compile_software_via_eb:
     output:
         real_binary = "{path}/{executable}.exe"
     log:
-        "logs/compile_{executable}.log"
+        "{path}/logs/compile_{executable}.log"
     wildcard_constraints:
         executable = "ungrib|wrf",
-        path = ".*"
+        path = "(?!logs/|audit/|logs$).*"
     params:
         eessi_init   = EESSI_INIT,
         status_json  = lambda wildcards: "audit/WRF_status.json" if wildcards.executable == "wrf" else "audit/WPS_status.json",
