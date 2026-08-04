@@ -7,11 +7,12 @@ EESSI_INIT  = config["eessi_init_script"]
 WPS_VER     = config["wps_version"]
 WRF_VER     = config["wrf_version"]
 TC_SUFFIX   = config["toolchain_suffix"]
+BIN_DIR     = config.get("compilation_bin_dir", "bin")
 
 rule all:
     input:
-        "bin/ungrib.exe",
-        "bin/wrf.exe"
+        f"{BIN_DIR}/ungrib.exe",
+        f"{BIN_DIR}/wrf.exe"
 
 # =========================================================================
 # RULE 1: Dynamic Discovery of Central EESSI Repository State via eb -S
@@ -43,19 +44,19 @@ rule compile_software_via_eb:
         wps_json = "audit/WPS_status.json",
         wrf_json = "audit/WRF_status.json",
         # WRF compilation first
-        wrf_ready = lambda wildcards: "bin/wrf.exe" if wildcards.executable == "ungrib" else []
+        wrf_ready = lambda wildcards: f"{BIN_DIR}/wrf.exe" if wildcards.executable == "ungrib" else []
     output:
         # Real victory condition: exact binary path mapped locally inside the repository
-        real_binary = "bin/{executable}.exe"
+        real_binary = f"{BIN_DIR}/{{executable}}.exe"
     log:
-        "logs/compile_{executable}.log"
+        f"logs/compile_{{executable}}.log"
     wildcard_constraints:
         executable = "ungrib|wrf"
     params:
         eessi_init   = EESSI_INIT,
         status_json  = lambda wildcards: "audit/WRF_status.json" if wildcards.executable == "wrf" else "audit/WPS_status.json",
         local_recipe = lambda wildcards: os.path.abspath(f"config/{'WPS' if wildcards.executable == 'ungrib' else 'WRF'}-{WPS_VER if wildcards.executable == 'ungrib' else WRF_VER}{TC_SUFFIX}.eb"),
-        marker_dir   = os.path.abspath("bin"),
+        marker_dir   = os.path.abspath(BIN_DIR),
         marker_abs   = lambda wildcards, output: os.path.abspath(output.real_binary)
     threads: 8
     shell:
