@@ -11,7 +11,7 @@ TC_SUFFIX   = config["toolchain_suffix"]
 WPS_BIN_DIR = config.get("wps_bin_dir", "bin")
 WRF_BIN_DIR = config.get("wrf_bin_dir", "bin")
 
-rule all:
+rule compilation_targets:
     input:
         f"{WPS_BIN_DIR}/ungrib.exe",
         f"{WRF_BIN_DIR}/wrf.exe"
