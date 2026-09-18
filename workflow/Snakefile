@@ -7,65 +7,118 @@ EESSI_INIT  = config["eessi_init_script"]
 WPS_VER     = config["wps_version"]
 WRF_VER     = config["wrf_version"]
 TC_SUFFIX   = config["toolchain_suffix"]
+WPS_BIN_DIR = config.get("wps_bin_dir", "bin")
+WRF_BIN_DIR = config.get("wrf_bin_dir", "bin")
 
 rule all:
     input:
-        "bin/ungrib.exe",
-        "bin/wrf.exe"
+        f"{WPS_BIN_DIR}/ungrib.exe",
+        f"{WPS_BIN_DIR}/geogrid.exe",
+        f"{WPS_BIN_DIR}/metgrid.exe",
+        f"{WRF_BIN_DIR}/real.exe",
+        f"{WRF_BIN_DIR}/wrf.exe"
 
 # =========================================================================
 # RULE 1: Dynamic Discovery of Central EESSI Repository State via eb -S
 # =========================================================================
-rule audit_eessi_status:
+rule audit_wps_status:
     output:
-        json_report = "audit/{software}_status.json"
+        json_report = "audit/WPS_status.json"
     params:
         eessi_init = EESSI_INIT,
-        version    = lambda wildcards: WPS_VER if wildcards.software == "WPS" else WRF_VER,
+        version    = WPS_VER,
         tc_suffix  = TC_SUFFIX
     threads: 1
     shell:
         """
         workflow/scripts/audit.sh \
             '{params.eessi_init}' \
-            '{wildcards.software}' \
+            'WPS' \
+            '{params.version}' \
+            '{params.tc_suffix}' \
+            '{output.json_report}'
+        """
+
+rule audit_wrf_status:
+    output:
+        json_report = "audit/WRF_status.json"
+    params:
+        eessi_init = EESSI_INIT,
+        version    = WRF_VER,
+        tc_suffix  = TC_SUFFIX
+    threads: 1
+    shell:
+        """
+        workflow/scripts/audit.sh \
+            '{params.eessi_init}' \
+            'WRF' \
             '{params.version}' \
             '{params.tc_suffix}' \
             '{output.json_report}'
         """
 
 # =========================================================================
-# RULE 2: Intelligent Compilation and Dynamic Local Symlink Generation
+# RULE 2: Compilation and Dynamic Local Symlink Generation
 # =========================================================================
-rule compile_software_via_eb:
+
+# =========================================================================
+# COMPILACIÓN DE WPS
+# =========================================================================
+rule compile_wps_via_eb:
     input:
-        # Static file constraints preventing Python-to-Snakemake wildcard collisions
         wps_json = "audit/WPS_status.json",
-        wrf_json = "audit/WRF_status.json"
+        wrf_json = "audit/WRF_status.json",
+        wrf_ready = f"{WRF_BIN_DIR}/wrf.exe"  # WPS necesita que WRF esté listo antes
     output:
-        # Real victory condition: exact binary path mapped locally inside the repository
-        real_binary = "bin/{executable}.exe"
-    wildcard_constraints:
-        executable = "ungrib|wrf"
+        f"{WPS_BIN_DIR}/geogrid.exe",
+        f"{WPS_BIN_DIR}/ungrib.exe",
+        f"{WPS_BIN_DIR}/metgrid.exe"
+    log:
+        "logs/compile_WPS.log"
     params:
         eessi_init   = EESSI_INIT,
-        sw_name      = lambda wildcards: "WPS" if wildcards.executable == "ungrib" else "WRF",
-        local_recipe = lambda wildcards: os.path.abspath(f"config/{'WPS' if wildcards.executable == 'ungrib' else 'WRF'}-{WPS_VER if wildcards.executable == 'ungrib' else WRF_VER}{TC_SUFFIX}.eb"),
-        marker_dir   = os.path.abspath("bin"),
-        marker_abs   = lambda wildcards, output: os.path.abspath(output.real_binary)
+        status_json  = "audit/WPS_status.json",
+        local_recipe = os.path.abspath(f"config/WPS-{WPS_VER}{TC_SUFFIX}.eb"),
+        marker_dir   = os.path.abspath(WPS_BIN_DIR)
     threads: 8
     shell:
         """
-        # Dynamically inject the appropriate JSON metadata footprint into the compiler
-        STATUS_JSON="audit/WPS_status.json"
-        if [ "{wildcards.executable}" == "wrf" ]; then
-            STATUS_JSON="audit/WRF_status.json"
-        fi
-
+        set -x
         workflow/scripts/compile.sh \
             '{params.eessi_init}' \
-            "$STATUS_JSON" \
+            '{params.status_json}' \
             '{params.local_recipe}' \
             '{params.marker_dir}' \
-            '{params.marker_abs}'
+            'WPS' \
+            '{threads}'
+        """
+
+# =========================================================================
+# COMPILACIÓN DE WRF
+# =========================================================================
+rule compile_wrf_via_eb:
+    input:
+        wps_json = "audit/WPS_status.json",
+        wrf_json = "audit/WRF_status.json"
+    output:
+        f"{WRF_BIN_DIR}/real.exe",
+        f"{WRF_BIN_DIR}/wrf.exe"
+    log:
+        "logs/compile_WRF.log"
+    params:
+        eessi_init   = EESSI_INIT,
+        status_json  = "audit/WRF_status.json",
+        local_recipe = os.path.abspath(f"config/WRF-{WRF_VER}{TC_SUFFIX}.eb"),
+        marker_dir   = os.path.abspath(WRF_BIN_DIR)
+    threads: 8
+    shell:
+        """
+        set -x
+        workflow/scripts/compile.sh \
+            '{params.eessi_init}' \
+            '{params.status_json}' \
+            '{params.local_recipe}' \
+            '{params.marker_dir}' \
+            'WRF' \
+            '{threads}'
         """
