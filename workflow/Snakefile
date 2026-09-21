@@ -32,7 +32,7 @@ rule audit_wps_status:
     threads: 1
     shell:
         """
-        '{params.script}' \
+        bash '{params.script}' \
             '{params.eessi_init}' \
             'WPS' \
             '{params.version}' \
@@ -51,7 +51,7 @@ rule audit_wrf_status:
     threads: 1
     shell:
         """
-        '{params.script}' \
+        bash '{params.script}' \
             '{params.eessi_init}' \
             'WRF' \
             '{params.version}' \
@@ -87,7 +87,7 @@ rule compile_wps_via_eb:
     shell:
         """
         set -x
-        '{params.script}' \
+        bash '{params.script}' \
             '{params.eessi_init}' \
             '{params.status_json}' \
             '{params.local_recipe}' \
@@ -118,7 +118,7 @@ rule compile_wrf_via_eb:
     shell:
         """
         set -x
-        '{params.script}' \
+        bash '{params.script}' \
             '{params.eessi_init}' \
             '{params.status_json}' \
             '{params.local_recipe}' \
