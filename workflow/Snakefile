@@ -27,11 +27,12 @@ rule audit_wps_status:
     params:
         eessi_init = EESSI_INIT,
         version    = WPS_VER,
-        tc_suffix  = TC_SUFFIX
+        tc_suffix  = TC_SUFFIX,
+        script     = workflow.source_path("scripts/audit.sh")
     threads: 1
     shell:
         """
-        workflow/scripts/audit.sh \
+        '{params.script}' \
             '{params.eessi_init}' \
             'WPS' \
             '{params.version}' \
@@ -45,11 +46,12 @@ rule audit_wrf_status:
     params:
         eessi_init = EESSI_INIT,
         version    = WRF_VER,
-        tc_suffix  = TC_SUFFIX
+        tc_suffix  = TC_SUFFIX,
+        script     = workflow.source_path("scripts/audit.sh")
     threads: 1
     shell:
         """
-        workflow/scripts/audit.sh \
+        '{params.script}' \
             '{params.eessi_init}' \
             'WRF' \
             '{params.version}' \
@@ -66,9 +68,9 @@ rule audit_wrf_status:
 # =========================================================================
 rule compile_wps_via_eb:
     input:
-        wps_json = "audit/WPS_status.json",
-        wrf_json = "audit/WRF_status.json",
-        wrf_ready = f"{WRF_BIN_DIR}/wrf.exe"  # WPS necesita que WRF esté listo antes
+        wps_json  = "audit/WPS_status.json",
+        wrf_json  = "audit/WRF_status.json",
+        wrf_ready = f"{WRF_BIN_DIR}/wrf.exe",  # WPS necesita que WRF esté listo antes
     output:
         f"{WPS_BIN_DIR}/geogrid.exe",
         f"{WPS_BIN_DIR}/ungrib.exe",
@@ -79,12 +81,13 @@ rule compile_wps_via_eb:
         eessi_init   = EESSI_INIT,
         status_json  = "audit/WPS_status.json",
         local_recipe = os.path.abspath(f"config/WPS-{WPS_VER}{TC_SUFFIX}.eb"),
-        marker_dir   = os.path.abspath(WPS_BIN_DIR)
+        marker_dir   = os.path.abspath(WPS_BIN_DIR),
+        script       = workflow.source_path("scripts/compile.sh")
     threads: 8
     shell:
         """
         set -x
-        workflow/scripts/compile.sh \
+        '{params.script}' \
             '{params.eessi_init}' \
             '{params.status_json}' \
             '{params.local_recipe}' \
@@ -109,12 +112,13 @@ rule compile_wrf_via_eb:
         eessi_init   = EESSI_INIT,
         status_json  = "audit/WRF_status.json",
         local_recipe = os.path.abspath(f"config/WRF-{WRF_VER}{TC_SUFFIX}.eb"),
-        marker_dir   = os.path.abspath(WRF_BIN_DIR)
+        marker_dir   = os.path.abspath(WRF_BIN_DIR),
+        script       = workflow.source_path("scripts/compile.sh")
     threads: 8
     shell:
         """
         set -x
-        workflow/scripts/compile.sh \
+        '{params.script}' \
             '{params.eessi_init}' \
             '{params.status_json}' \
             '{params.local_recipe}' \
