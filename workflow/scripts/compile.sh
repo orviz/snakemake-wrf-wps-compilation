@@ -11,6 +11,7 @@ LOCAL_RECIPE_PATH="$3"
 MARKER_DIR="$4"
 SOFTWARE_NAME="$5"
 NUM_THREADS="$6"
+INSTALL_DIR="$7"
 
 # =========================================================================
 # 2. DYNAMIC METADATA EXTRACTION FROM JSON (HPC-Safe using Python)
@@ -42,6 +43,7 @@ if [ "$STATUS" == "EESSI_OFFICIAL" ]; then
 
     eb "$RECIPE_TARGET" \
       --robot \
+      --prefix="$INSTALL_DIR" \
       --parallel="$NUM_THREADS" \
       --local-var-naming-check=warn \
       --skip-test-step \
@@ -53,6 +55,7 @@ else
 
     eb "$LOCAL_RECIPE_PATH" \
       --robot \
+      --prefix="$INSTALL_DIR" \
       --parallel="$NUM_THREADS" \
       --local-var-naming-check=warn \
       --skip-test-step \
@@ -65,7 +68,8 @@ fi
 # =========================================================================
 # 5. DYNAMIC DISCOVERY AND MULTI-BINARY LINKING
 # =========================================================================
-INSTALL_PATH="${EASYBUILD_INSTALLPATH:-$HOME/eessi/versions/2025.06/software}"
+# Fallback to EESSI_INSTALLPATH if INSTALL_DIR is not provided.
+INSTALL_PATH="${INSTALL_DIR:-${EASYBUILD_INSTALLPATH:-$HOME/eessi/versions/2025.06/software}}"
 
 echo "[Compiler] Scanning for real binary assets within dynamic path: $INSTALL_PATH"
 mkdir -p "$MARKER_DIR"
