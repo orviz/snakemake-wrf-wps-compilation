@@ -102,4 +102,10 @@ else
     exit 1
 fi
 
+# Store Environment Metadata
+ENV_FILE="$MARKER_DIR/env.sh"
+echo "export WPS_SOURCE_DIR=\"$REAL_BIN_DIR\"" > "$ENV_FILE"  # Ajustado según donde encuentre las tablas
+echo "[Compiler Success] Environment metadata exported to: $ENV_FILE"
+
+
 echo "[Compiler Success] All production symlinks successfully established in: $MARKER_DIR"
