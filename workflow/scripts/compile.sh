@@ -29,6 +29,10 @@ source "$EESSI_INIT_SCRIPT"
 module load EESSI-extend
 set -u
 
+# Force EasyBuild to use INSTALL_DIR
+export EASYBUILD_PREFIX="$INSTALL_DIR"
+export EASYBUILD_INSTALLPATH="$INSTALL_DIR"
+
 # Core threading and memory mitigation flags for subprocess scheduling
 export OPENBLAS_NUM_THREADS=1
 export FLEXIBLAS_NUM_THREADS=1
@@ -43,7 +47,6 @@ if [ "$STATUS" == "EESSI_OFFICIAL" ]; then
 
     eb "$RECIPE_TARGET" \
       --robot \
-      --prefix="$INSTALL_DIR" \
       --parallel="$NUM_THREADS" \
       --local-var-naming-check=warn \
       --skip-test-step \
@@ -55,7 +58,6 @@ else
 
     eb "$LOCAL_RECIPE_PATH" \
       --robot \
-      --prefix="$INSTALL_DIR" \
       --parallel="$NUM_THREADS" \
       --local-var-naming-check=warn \
       --skip-test-step \
@@ -68,33 +70,30 @@ fi
 # =========================================================================
 # 5. DYNAMIC DISCOVERY AND MULTI-BINARY LINKING
 # =========================================================================
-# Fallback to EESSI_INSTALLPATH if INSTALL_DIR is not provided.
-INSTALL_PATH="${INSTALL_DIR:-${EASYBUILD_INSTALLPATH:-$HOME/eessi/versions/2025.06/software}}"
-
-echo "[Compiler] Scanning for real binary assets within dynamic path: $INSTALL_PATH"
+echo "[Compiler] Scanning for real binary assets within local repo path: $INSTALL_DIR"
 mkdir -p "$MARKER_DIR"
 
 if [ "$SOFTWARE_NAME" == "WPS" ]; then
     # Seek and link the 3 WPS binaries (geogrid, ungrib, metgrid)
     for bin in geogrid ungrib metgrid; do
-        REAL_BIN=$(find "$INSTALL_PATH" -type f -name "${bin}.exe" | head -n 1)
+        REAL_BIN=$(find "$INSTALL_DIR" -type f -name "${bin}.exe" | head -n 1)
         if [ -n "$REAL_BIN" ]; then
             echo " -> [OK] WPS binary located at: $REAL_BIN"
             ln -sf "$REAL_BIN" "$MARKER_DIR/${bin}.exe"
         else
-            echo "❌ [Error] Sanity Check crashed: ${bin}.exe not discovered in $INSTALL_PATH"
+            echo "❌ [Error] Sanity Check crashed: ${bin}.exe not discovered in $INSTALL_DIR"
             exit 1
         fi
     done
 elif [ "$SOFTWARE_NAME" == "WRF" ]; then
     # Seek and link the 2 WRF binaries (real, wrf)
     for bin in real wrf; do
-        REAL_BIN=$(find "$INSTALL_PATH" -type f -name "${bin}.exe" | head -n 1)
+        REAL_BIN=$(find "$INSTALL_DIR" -type f -name "${bin}.exe" | head -n 1)
         if [ -n "$REAL_BIN" ]; then
             echo " -> [OK] WRF binary located at: $REAL_BIN"
             ln -sf "$REAL_BIN" "$MARKER_DIR/${bin}.exe"
         else
-            echo "❌ [Error] Sanity Check crashed: ${bin}.exe not discovered in $INSTALL_PATH"
+            echo "❌ [Error] Sanity Check crashed: ${bin}.exe not discovered in $INSTALL_DIR"
             exit 1
         fi
     done
