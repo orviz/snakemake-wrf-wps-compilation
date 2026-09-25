@@ -87,6 +87,12 @@ if [ "$SOFTWARE_NAME" == "WPS" ]; then
             exit 1
         fi
     done
+    # Add metadata to the WPS_status.json file
+    if [ -f "$STATUS_JSON" ]; then
+        sed -i 's/}/,\n  "final_install_path": "'"${WPS_REAL_ROOT}"'"\n}/' "$STATUS_JSON"
+    else
+        echo -e '{\n  "status": "success",\n  "final_install_path": "'"${WPS_REAL_ROOT}"'"\n}' > "$STATUS_JSON"
+    f
 elif [ "$SOFTWARE_NAME" == "WRF" ]; then
     # Seek and link the 2 WRF binaries (real, wrf)
     for bin in real wrf; do
@@ -99,6 +105,12 @@ elif [ "$SOFTWARE_NAME" == "WRF" ]; then
             exit 1
         fi
     done
+    # Add metadata to the WRF_status.json file
+    if [ -f "$STATUS_JSON" ]; then
+        sed -i 's/}/,\n  "final_install_path": "'"${WRF_REAL_ROOT}"'"\n}/' "$STATUS_JSON"
+    else
+        echo -e '{\n  "status": "success",\n  "final_install_path": "'"${WRF_REAL_ROOT}"'"\n}' > "$STATUS_JSON"
+    fi
 else
     echo "❌ [Error] Unknown software target: $SOFTWARE_NAME"
     exit 1

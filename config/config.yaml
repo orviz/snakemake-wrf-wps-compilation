@@ -1,13 +1,12 @@
 ---
 
 eessi_init_script: "/cvmfs/software.eessi.io/versions/2025.06/init/bash"
-
 toolchain_suffix: "-foss-2024a-dmpar"
 
 wrf_version: "4.6.1"
 wps_version: "4.6.0"
 
-wrf_install_dir: "bin"
-wps_install_dir: "bin"
+wps_install_dir: "software/WPS"
+wrf_install_dir: "software/WRF"
 
 compiler: "intel"
