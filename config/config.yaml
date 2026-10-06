@@ -10,3 +10,8 @@ wps_install_dir: "software/WPS"
 wrf_install_dir: "software/WRF"
 
 compiler: "intel"
+
+installation_engine: "easybuild"
+
+engine_wps_subdir: "software/WPS/{wps_version}{toolchain_suffix}/WPS-{wps_version}"
+engine_wrf_subdir: "software/WRF/{wrf_version}{toolchain_suffix}/WRFV{wrf_version}"

@@ -3,15 +3,14 @@
 set -euo pipefail
 
 # =========================================================================
-# 1. PARSE SNAKEMAKE INPUT PARAMETERS
+# 1. PARSE SNAKEMAKE INPUT PARAMETERS (MARKER_DIR removed)
 # =========================================================================
 EESSI_INIT_SCRIPT="$1"
 STATUS_JSON="$2"
 LOCAL_RECIPE_PATH="$3"
-MARKER_DIR="$4"
-SOFTWARE_NAME="$5"
-NUM_THREADS="$6"
-INSTALL_DIR="$7"
+SOFTWARE_NAME="$4"
+NUM_THREADS="$5"
+INSTALL_DIR="$6"
 
 # =========================================================================
 # 2. DYNAMIC METADATA EXTRACTION FROM JSON (HPC-Safe using Python)
@@ -70,38 +69,51 @@ else
 fi
 
 # =========================================================================
-# 5. DYNAMIC DISCOVERY AND MULTI-BINARY LINKING
+# 5. DYNAMIC DISCOVERY AND STANDARD ROOT LINKING (Single Link Abstraction)
 # =========================================================================
 echo "[Compiler] Scanning for real binary assets within local repo path: $INSTALL_DIR"
-mkdir -p "$MARKER_DIR"
 
 if [ "$SOFTWARE_NAME" == "WPS" ]; then
-    # Seek and link the 3 WPS binaries (geogrid, ungrib, metgrid)
-    for bin in geogrid ungrib metgrid; do
-        REAL_BIN=$(find "$INSTALL_DIR" -type f -name "${bin}.exe" | head -n 1)
-        if [ -n "$REAL_BIN" ]; then
-            echo " -> [OK] WPS binary located at: $REAL_BIN"
-            ln -sf "$REAL_BIN" "$MARKER_DIR/${bin}.exe"
-        else
-            echo "❌ [Error] Sanity Check crashed: ${bin}.exe not discovered in $INSTALL_DIR"
-            exit 1
-        fi
-    done
-elif [ "$SOFTWARE_NAME" == "WRF" ]; then
-    # Seek and link the 2 WRF binaries (real, wrf)
-    for bin in real wrf; do
-        REAL_BIN=$(find "$INSTALL_DIR" -type f -name "${bin}.exe" | head -n 1)
-        if [ -n "$REAL_BIN" ]; then
-            echo " -> [OK] WRF binary located at: $REAL_BIN"
-            ln -sf "$REAL_BIN" "$MARKER_DIR/${bin}.exe"
-        else
-            echo "❌ [Error] Sanity Check crashed: ${bin}.exe not discovered in $INSTALL_DIR"
-            exit 1
-        fi
-    done
-else
-    echo "❌ [Error] Unknown software target: $SOFTWARE_NAME"
-    exit 1
-fi
+    # 1. Gather the first binary to deduce the deep real root of WPS
+    FIRST_BIN=$(find "$INSTALL_DIR" -type f -name "geogrid.exe" | head -n 1)
+    if [ -z "$FIRST_BIN" ]; then
+        echo "❌ [Error] Sanity Check crashed: geogrid.exe not discovered under $INSTALL_DIR"
+        exit 1
+    fi
+    WPS_REAL_ROOT=$(dirname "$FIRST_BIN")
 
-echo "[Compiler Success] All production symlinks successfully established in: $MARKER_DIR"
+    # Agrupación robusta usando paréntesis para evitar cortocircuitos extraños en Bash
+    if [[ "$WPS_REAL_ROOT" == */geogrid/src ]]; then
+        WPS_REAL_ROOT=$(dirname $(dirname "$WPS_REAL_ROOT"))
+    elif [[ "$WPS_REAL_ROOT" == */bin ]]; then
+        WPS_REAL_ROOT=$(dirname "$WPS_REAL_ROOT")
+    fi
+
+    # 2. Remove the empty physical folder to avoid confusion and ensure a single symlink
+    rmdir "$INSTALL_DIR" 2>/dev/null || rm -rf "$INSTALL_DIR"
+
+    # 3. Create the single global symlink to the real root
+    ln -sfn "$WPS_REAL_ROOT" "$INSTALL_DIR"
+    echo " -> [Standardization] Single global symlink created: $INSTALL_DIR -> $WPS_REAL_ROOT"
+
+elif [ "$SOFTWARE_NAME" == "WRF" ]; then
+    # 1. Gather the first binary to deduce the deep real root of WRF
+    FIRST_BIN=$(find "$INSTALL_DIR" -type f -name "wrf.exe" | head -n 1)
+    if [ -z "$FIRST_BIN" ]; then
+        echo "❌ [Error] Sanity Check crashed: wrf.exe not discovered under $INSTALL_DIR"
+        exit 1
+    fi
+    WRF_REAL_ROOT=$(dirname "$FIRST_BIN")
+
+    # Agrupación limpia y segura mediante condicionales explícitos
+    if [[ "$WRF_REAL_ROOT" == */main ]] || [[ "$WRF_REAL_ROOT" == */run ]] || [[ "$WRF_REAL_ROOT" == */bin ]]; then
+        WRF_REAL_ROOT=$(dirname "$WRF_REAL_ROOT")
+    fi
+
+    # 2. Remove the empty physical folder to avoid confusion and ensure a single symlink
+    rmdir "$INSTALL_DIR" 2>/dev/null || rm -rf "$INSTALL_DIR"
+
+    # 3. Create the single global symlink to the real root
+    ln -sfn "$WRF_REAL_ROOT" "$INSTALL_DIR"
+    echo " -> [Standardization] Single global symlink created: $INSTALL_DIR -> $WRF_REAL_ROOT"
+fi
