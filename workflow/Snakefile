@@ -1,28 +1,84 @@
 import os
+import shutil
+from pathlib import Path
+
+from snakemake.exceptions import WorkflowError
 
 configfile: "config/config.yaml"
 
-EESSI_INIT  = config["eessi_init_script"]
-WRF_VER     = config["wrf_version"]
-WPS_VER     = config["wps_version"]
-TC_SUFFIX   = config["toolchain_suffix"]
-
+# =================================================================================
+# 1. ENVIRONMENT CONFIG GATHERING: Carga inicial de variables globales
+# =================================================================================
+EESSI_INIT      = config["eessi_init_script"]
+WRF_VER         = config["wrf_version"]
+WPS_VER         = config["wps_version"]
 WRF_INSTALL_DIR = config["wrf_install_dir"]
 WPS_INSTALL_DIR = config["wps_install_dir"]
-WRF_BIN_DIR = f"{WRF_INSTALL_DIR}/bin"
-WPS_BIN_DIR = f"{WPS_INSTALL_DIR}/bin"
 
+# ==========================================================================================================
+# 2. COMPILATION ENGINE CONFIG VALIDATION: Verificación del motor de compilación seleccionado
+# ==========================================================================================================
+SUPPORTED_ENGINES = ["easybuild"]
+ENGINE_TYPE = config.get("installation_engine", "easybuild").lower()
+
+if ENGINE_TYPE not in SUPPORTED_ENGINES:
+    raise WorkflowError(
+        f"\n[ERROR] Installation engine '{ENGINE_TYPE}' is not supported.\n"
+        f"Currently supported engines are: {SUPPORTED_ENGINES}\n"
+    )
+
+ENGINE_PARAMS = config.get(ENGINE_TYPE, {})
+
+# =================================================================================
+# 3. ENGINE PATH RESOLUTION: Construcción limpia de las subrutas del motor
+# =================================================================================
+if ENGINE_TYPE == "easybuild":
+    TC_NAME = ENGINE_PARAMS.get("toolchain_name", "foss")
+    TC_VER  = ENGINE_PARAMS.get("toolchain_version", "2024a")
+    TC_TYPE = ENGINE_PARAMS.get("toolchain_type", "dmpar")
+
+    TC_SUFFIX = f"-{TC_NAME}-{TC_VER}-{TC_TYPE}"
+
+    WPS_SUBDIR_TEMPLATE = ENGINE_PARAMS.get("wps_subdir", "")
+    WRF_SUBDIR_TEMPLATE = ENGINE_PARAMS.get("wrf_subdir", "")
+
+    ENGINE_WPS_SUBDIR = WPS_SUBDIR_TEMPLATE.format(
+        wps_version=WPS_VER,
+        toolchain_name=TC_NAME,
+        toolchain_version=TC_VER,
+        toolchain_type=TC_TYPE
+    )
+    ENGINE_WRF_SUBDIR = WRF_SUBDIR_TEMPLATE.format(
+        wrf_version=WRF_VER,
+        toolchain_name=TC_NAME,
+        toolchain_version=TC_VER,
+        toolchain_type=TC_TYPE
+    )
+
+    ENGINE_WPS_ROOT = f".easybuild/{ENGINE_WPS_SUBDIR}".rstrip("/")
+    ENGINE_WRF_ROOT = f".easybuild/{ENGINE_WRF_SUBDIR}".rstrip("/")
+
+    config["toolchain_suffix"] = TC_SUFFIX
+else:
+    ENGINE_WPS_ROOT = ENGINE_PARAMS.get("wps_subdir", "").rstrip("/")
+    ENGINE_WRF_ROOT = ENGINE_PARAMS.get("wrf_subdir", "").rstrip("/")
+
+print(f"[DAG Initialize] Tuning pipeline using engine: {ENGINE_TYPE.upper()}")
+
+# =================================================================================================================
+# TARGET RULE: La regla maestra que exige las salidas de las reglas de enlace final
+# =================================================================================================================
 rule all:
     input:
-        f"{WPS_BIN_DIR}/ungrib.exe",
-        f"{WPS_BIN_DIR}/geogrid.exe",
-        f"{WPS_BIN_DIR}/metgrid.exe",
-        f"{WRF_BIN_DIR}/real.exe",
-        f"{WRF_BIN_DIR}/wrf.exe"
+        f"{WPS_INSTALL_DIR}/ungrib.exe",
+        f"{WPS_INSTALL_DIR}/geogrid.exe",
+        f"{WPS_INSTALL_DIR}/metgrid.exe",
+        f"{WRF_INSTALL_DIR}/main/real.exe",
+        f"{WRF_INSTALL_DIR}/main/wrf.exe"
 
-# =========================================================================
-# RULE 1: Dynamic Discovery of Central EESSI Repository State via eb -S
-# =========================================================================
+# =============================================================================================
+# AUDIT RULES: Verify the status of WPS and WRF installations and generate JSON reports
+# =============================================================================================
 rule audit_wps_status:
     output:
         json_report = "audit/WPS_status.json"
@@ -61,63 +117,24 @@ rule audit_wrf_status:
             '{output.json_report}'
         """
 
-# =========================================================================
-# RULE 2: Compilation and Dynamic Local Symlink Generation
-# =========================================================================
+# =============================================================================================
+# COMPILATION RULES: Compile WPS and WRF using EasyBuild recipes and generate executables
+# =============================================================================================
 
-# =========================================================================
-# COMPILACIÓN DE WPS
-# =========================================================================
-rule compile_wps_via_eb:
-    input:
-        wps_json  = "audit/WPS_status.json",
-        wrf_json  = "audit/WRF_status.json",
-        wrf_ready = f"{WRF_BIN_DIR}/wrf.exe",  # WPS necesita que WRF esté listo antes
-    output:
-        f"{WPS_BIN_DIR}/geogrid.exe",
-        f"{WPS_BIN_DIR}/ungrib.exe",
-        f"{WPS_BIN_DIR}/metgrid.exe"
-    log:
-        "logs/compile_WPS.log"
-    params:
-        eessi_init   = EESSI_INIT,
-        status_json  = "audit/WPS_status.json",
-        local_recipe = os.path.abspath(f"config/WPS-{WPS_VER}{TC_SUFFIX}.eb"),
-        marker_dir   = os.path.abspath(WPS_BIN_DIR),
-        install_dir  = WPS_INSTALL_DIR,
-        script       = workflow.source_path("scripts/compile.sh")
-    threads: 8
-    shell:
-        """
-        set -x
-        bash '{params.script}' \
-            '{params.eessi_init}' \
-            '{params.status_json}' \
-            '{params.local_recipe}' \
-            '{params.marker_dir}' \
-            'WPS' \
-            '{threads}' \
-            '{params.install_dir}'
-        """
-
-# =========================================================================
-# COMPILACIÓN DE WRF
-# =========================================================================
 rule compile_wrf_via_eb:
     input:
         wps_json = "audit/WPS_status.json",
         wrf_json = "audit/WRF_status.json"
     output:
-        f"{WRF_BIN_DIR}/real.exe",
-        f"{WRF_BIN_DIR}/wrf.exe"
+        real_bin = f"{ENGINE_WRF_ROOT}/main/real.exe",
+        wrf_bin  = f"{ENGINE_WRF_ROOT}/main/wrf.exe"
     log:
         "logs/compile_WRF.log"
     params:
         eessi_init   = EESSI_INIT,
         status_json  = "audit/WRF_status.json",
         local_recipe = os.path.abspath(f"config/WRF-{WRF_VER}{TC_SUFFIX}.eb"),
-        marker_dir   = os.path.abspath(WRF_BIN_DIR),
-        install_dir  = WRF_INSTALL_DIR,
+        install_dir  = os.path.abspath(".easybuild"),
         script       = workflow.source_path("scripts/compile.sh")
     threads: 8
     shell:
@@ -127,8 +144,85 @@ rule compile_wrf_via_eb:
             '{params.eessi_init}' \
             '{params.status_json}' \
             '{params.local_recipe}' \
-            '{params.marker_dir}' \
             'WRF' \
             '{threads}' \
             '{params.install_dir}'
         """
+
+rule compile_wps_via_eb:
+    input:
+        wps_json  = "audit/WPS_status.json",
+        wrf_json  = "audit/WRF_status.json",
+        wrf_ready = f"{ENGINE_WRF_ROOT}/main/wrf.exe", # Espera al binario real del motor
+    output:
+        geogrid_bin = f"{ENGINE_WPS_ROOT}/geogrid.exe",
+        ungrib_bin  = f"{ENGINE_WPS_ROOT}/ungrib.exe",
+        metgrid_bin = f"{ENGINE_WPS_ROOT}/metgrid.exe"
+    log:
+        "logs/compile_WPS.log"
+    params:
+        eessi_init   = EESSI_INIT,
+        status_json  = "audit/WPS_status.json",
+        local_recipe = os.path.abspath(f"config/WPS-{WPS_VER}{TC_SUFFIX}.eb"),
+        install_dir  = os.path.abspath(".easybuild"),
+        script       = workflow.source_path("scripts/compile.sh")
+    threads: 8
+    shell:
+        """
+        set -x
+        bash '{params.script}' \
+            '{params.eessi_init}' \
+            '{params.status_json}' \
+            '{params.local_recipe}' \
+            'WPS' \
+            '{threads}' \
+            '{params.install_dir}'
+        """
+
+# =================================================================================================================
+# LINKING RULES: Create symbolic links to the compiled WPS and WRF executables in the installation directories
+# =================================================================================================================
+
+rule create_wps_master_link:
+    input:
+        geogrid_bin = f"{ENGINE_WPS_ROOT}/geogrid.exe",
+        ungrib_bin  = f"{ENGINE_WPS_ROOT}/ungrib.exe",
+        metgrid_bin = f"{ENGINE_WPS_ROOT}/metgrid.exe"
+    output:
+        f"{WPS_INSTALL_DIR}/geogrid.exe",
+        f"{WPS_INSTALL_DIR}/ungrib.exe",
+        f"{WPS_INSTALL_DIR}/metgrid.exe"
+    run:
+        from pathlib import Path
+        import os
+        import shutil
+
+        target_dir = WPS_INSTALL_DIR
+
+        if os.path.exists(target_dir) and not os.path.islink(target_dir):
+            if os.path.isdir(target_dir):
+                shutil.rmtree(target_dir)
+        Path(target_dir).symlink_to(Path(ENGINE_WPS_ROOT), target_is_directory=True)
+
+        print(f" -> [Linking Success] WPS master link established: {target_dir} -> {ENGINE_WPS_ROOT}")
+
+rule create_wrf_master_link:
+    input:
+        real_bin = f"{ENGINE_WRF_ROOT}/main/real.exe",
+        wrf_bin  = f"{ENGINE_WRF_ROOT}/main/wrf.exe"
+    output:
+        f"{WRF_INSTALL_DIR}/main/real.exe",
+        f"{WRF_INSTALL_DIR}/main/wrf.exe"
+    run:
+        from pathlib import Path
+        import os
+        import shutil
+
+        target_dir = WRF_INSTALL_DIR
+
+        if os.path.exists(target_dir) and not os.path.islink(target_dir):
+            if os.path.isdir(target_dir):
+                shutil.rmtree(target_dir)
+        Path(target_dir).symlink_to(Path(ENGINE_WRF_ROOT), target_is_directory=True)
+
+        print(f" -> [Linking Success] WRF master link established: {target_dir} -> {ENGINE_WRF_ROOT}")
