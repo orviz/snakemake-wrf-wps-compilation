@@ -33,12 +33,27 @@ ENGINE_PARAMS = config.get(ENGINE_TYPE, {})
 # 3. ENGINE PATH RESOLUTION: Construcción limpia de las subrutas del motor
 # =================================================================================
 if ENGINE_TYPE == "easybuild":
-    TC_SUFFIX = ENGINE_PARAMS.get("toolchain_suffix", "")
+    TC_NAME = ENGINE_PARAMS.get("toolchain_name", "foss")
+    TC_VER  = ENGINE_PARAMS.get("toolchain_version", "2024a")
+    TC_TYPE = ENGINE_PARAMS.get("toolchain_type", "dmpar")
+
+    TC_SUFFIX = f"-{TC_NAME}-{TC_VER}-{TC_TYPE}"
+
     WPS_SUBDIR_TEMPLATE = ENGINE_PARAMS.get("wps_subdir", "")
     WRF_SUBDIR_TEMPLATE = ENGINE_PARAMS.get("wrf_subdir", "")
 
-    ENGINE_WPS_SUBDIR = WPS_SUBDIR_TEMPLATE.format(wps_version=WPS_VER, toolchain_suffix=TC_SUFFIX)
-    ENGINE_WRF_SUBDIR = WRF_SUBDIR_TEMPLATE.format(wrf_version=WRF_VER, toolchain_suffix=TC_SUFFIX)
+    ENGINE_WPS_SUBDIR = WPS_SUBDIR_TEMPLATE.format(
+        wps_version=WPS_VER,
+        toolchain_name=TC_NAME,
+        toolchain_version=TC_VER,
+        toolchain_type=TC_TYPE
+    )
+    ENGINE_WRF_SUBDIR = WRF_SUBDIR_TEMPLATE.format(
+        wrf_version=WRF_VER,
+        toolchain_name=TC_NAME,
+        toolchain_version=TC_VER,
+        toolchain_type=TC_TYPE
+    )
 
     config["toolchain_suffix"] = TC_SUFFIX
 else:
