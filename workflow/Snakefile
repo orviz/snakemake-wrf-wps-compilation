@@ -39,8 +39,8 @@ if ENGINE_TYPE == "easybuild":
 
     TC_SUFFIX = f"-{TC_NAME}-{TC_VER}-{TC_TYPE}"
 
-    WPS_SUBDIR_TEMPLATE = ENGINE_PARAMS.get("wps_subdir", "")
-    WRF_SUBDIR_TEMPLATE = ENGINE_PARAMS.get("wrf_subdir", "")
+    WPS_SUBDIR_TEMPLATE = ENGINE_PARAMS.get("wps_subdir") or "software/WPS/{wps_version}-{toolchain_name}-{toolchain_version}-{toolchain_type}/WPS-{wps_version}"
+    WRF_SUBDIR_TEMPLATE = ENGINE_PARAMS.get("wrf_subdir") or "software/WRF/{wrf_version}-{toolchain_name}-{toolchain_version}-{toolchain_type}/WRFV{wrf_version}"
 
     ENGINE_WPS_SUBDIR = WPS_SUBDIR_TEMPLATE.format(
         wps_version=WPS_VER,
