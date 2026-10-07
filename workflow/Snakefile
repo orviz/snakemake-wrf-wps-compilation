@@ -55,13 +55,13 @@ if ENGINE_TYPE == "easybuild":
         toolchain_type=TC_TYPE
     )
 
+    ENGINE_WPS_ROOT = f".easybuild/{ENGINE_WPS_SUBDIR}".rstrip("/")
+    ENGINE_WRF_ROOT = f".easybuild/{ENGINE_WRF_SUBDIR}".rstrip("/")
+
     config["toolchain_suffix"] = TC_SUFFIX
 else:
-    ENGINE_WPS_SUBDIR = ENGINE_PARAMS.get("wps_subdir", "")
-    ENGINE_WRF_SUBDIR = ENGINE_PARAMS.get("wrf_subdir", "")
-
-ENGINE_WPS_ROOT = f"{WPS_INSTALL_DIR}/{ENGINE_WPS_SUBDIR}".rstrip("/")
-ENGINE_WRF_ROOT = f"{WRF_INSTALL_DIR}/{ENGINE_WRF_SUBDIR}".rstrip("/")
+    ENGINE_WPS_ROOT = ENGINE_PARAMS.get("wps_subdir", "").rstrip("/")
+    ENGINE_WRF_ROOT = ENGINE_PARAMS.get("wrf_subdir", "").rstrip("/")
 
 print(f"[DAG Initialize] Tuning pipeline using engine: {ENGINE_TYPE.upper()}")
 
@@ -134,7 +134,7 @@ rule compile_wrf_via_eb:
         eessi_init   = EESSI_INIT,
         status_json  = "audit/WRF_status.json",
         local_recipe = os.path.abspath(f"config/WRF-{WRF_VER}{TC_SUFFIX}.eb"),
-        install_dir  = WRF_INSTALL_DIR,
+        install_dir  = os.path.abspath(".easybuild"),
         script       = workflow.source_path("scripts/compile.sh")
     threads: 8
     shell:
@@ -164,7 +164,7 @@ rule compile_wps_via_eb:
         eessi_init   = EESSI_INIT,
         status_json  = "audit/WPS_status.json",
         local_recipe = os.path.abspath(f"config/WPS-{WPS_VER}{TC_SUFFIX}.eb"),
-        install_dir  = WPS_INSTALL_DIR,
+        install_dir  = os.path.abspath(".easybuild"),
         script       = workflow.source_path("scripts/compile.sh")
     threads: 8
     shell:
