@@ -1,8 +1,5 @@
 ---
 
-eessi_init_script: "/cvmfs/software.eessi.io/versions/2025.06/init/bash"
-toolchain_suffix: "-foss-2024a-dmpar"
-
 wrf_version: "4.6.1"
 wps_version: "4.6.0"
 
@@ -13,5 +10,9 @@ compiler: "intel"
 
 installation_engine: "easybuild"
 
-engine_wps_subdir: "software/WPS/{wps_version}{toolchain_suffix}/WPS-{wps_version}"
-engine_wrf_subdir: "software/WRF/{wrf_version}{toolchain_suffix}/WRFV{wrf_version}"
+easybuild:
+  toolchain_suffix: "-foss-2024a-dmpar"
+  wps_subdir: "software/WPS/{wps_version}{toolchain_suffix}/WPS-{wps_version}"
+  wrf_subdir: "software/WRF/{wrf_version}{toolchain_suffix}/WRFV{wrf_version}"
+
+eessi_init_script: "/cvmfs/software.eessi.io/versions/2025.06/init/bash"
