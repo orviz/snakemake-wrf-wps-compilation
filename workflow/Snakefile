@@ -199,7 +199,9 @@ rule create_wps_master_link:
 
         target_dir = WPS_INSTALL_DIR
 
-        if os.path.exists(target_dir) and not os.path.islink(target_dir):
+        if Path(target_dir).is_symlink():
+            Path(target_dir).unlink()
+        elif os.path.exists(target_dir):
             if os.path.isdir(target_dir):
                 shutil.rmtree(target_dir)
 
@@ -221,7 +223,9 @@ rule create_wrf_master_link:
 
         target_dir = WRF_INSTALL_DIR
 
-        if os.path.exists(target_dir) and not os.path.islink(target_dir):
+        if Path(target_dir).is_symlink():
+            Path(target_dir).unlink()
+        elif os.path.exists(target_dir):
             if os.path.isdir(target_dir):
                 shutil.rmtree(target_dir)
 
