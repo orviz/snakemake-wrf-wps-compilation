@@ -14,3 +14,10 @@ bin/
 # Temporary data downloads, tarballs, and runtime outputs
 data/
 logs/
+
+# Compilation directory
+.easybuild/
+
+# Master links to produced software
+WPS
+WRF
