@@ -202,7 +202,8 @@ rule create_wps_master_link:
         if os.path.exists(target_dir) and not os.path.islink(target_dir):
             if os.path.isdir(target_dir):
                 shutil.rmtree(target_dir)
-        Path(target_dir).symlink_to(Path(ENGINE_WPS_ROOT), target_is_directory=True)
+
+        Path(target_dir).symlink_to(Path(ENGINE_WPS_ROOT).resolve(), target_is_directory=True)
 
         print(f" -> [Linking Success] WPS master link established: {target_dir} -> {ENGINE_WPS_ROOT}")
 
@@ -223,6 +224,7 @@ rule create_wrf_master_link:
         if os.path.exists(target_dir) and not os.path.islink(target_dir):
             if os.path.isdir(target_dir):
                 shutil.rmtree(target_dir)
-        Path(target_dir).symlink_to(Path(ENGINE_WRF_ROOT), target_is_directory=True)
+
+        Path(target_dir).symlink_to(Path(ENGINE_WRF_ROOT).resolve(), target_is_directory=True)
 
         print(f" -> [Linking Success] WRF master link established: {target_dir} -> {ENGINE_WRF_ROOT}")
