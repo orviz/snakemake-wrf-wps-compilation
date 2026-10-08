@@ -189,9 +189,7 @@ rule create_wps_master_link:
         ungrib_bin  = f"{ENGINE_WPS_ROOT}/ungrib.exe",
         metgrid_bin = f"{ENGINE_WPS_ROOT}/metgrid.exe"
     output:
-        f"{WPS_INSTALL_DIR}/geogrid.exe",
-        f"{WPS_INSTALL_DIR}/ungrib.exe",
-        f"{WPS_INSTALL_DIR}/metgrid.exe"
+        wps_ready = "audit/wps_link_ready.txt"
     run:
         from pathlib import Path
         import os
@@ -205,17 +203,18 @@ rule create_wps_master_link:
             if os.path.isdir(target_dir):
                 shutil.rmtree(target_dir)
 
+        Path(target_dir).parent.mkdir(parents=True, exist_ok=True)
         Path(target_dir).symlink_to(Path(ENGINE_WPS_ROOT).resolve(), target_is_directory=True)
 
-        print(f" -> [Linking Success] WPS master link established: {target_dir} -> {ENGINE_WPS_ROOT}")
+        with open(output.wps_ready, "w") as f:
+            f.write("WPS master link operational")
 
 rule create_wrf_master_link:
     input:
         real_bin = f"{ENGINE_WRF_ROOT}/main/real.exe",
         wrf_bin  = f"{ENGINE_WRF_ROOT}/main/wrf.exe"
     output:
-        f"{WRF_INSTALL_DIR}/main/real.exe",
-        f"{WRF_INSTALL_DIR}/main/wrf.exe"
+        wrf_ready = "audit/wrf_link_ready.txt"
     run:
         from pathlib import Path
         import os
@@ -223,14 +222,15 @@ rule create_wrf_master_link:
 
         target_dir = WRF_INSTALL_DIR
 
-        Path(target_dir).parent.mkdir(parents=True, exist_ok=True)
-
         if Path(target_dir).is_symlink():
             Path(target_dir).unlink()
         elif os.path.exists(target_dir):
             if os.path.isdir(target_dir):
                 shutil.rmtree(target_dir)
 
+        Path(target_dir).parent.mkdir(parents=True, exist_ok=True)
         Path(target_dir).symlink_to(Path(ENGINE_WRF_ROOT).resolve(), target_is_directory=True)
 
-        print(f" -> [Linking Success] WRF master link established: {target_dir} -> {ENGINE_WRF_ROOT}")
+        with open(output.wrf_ready, "w") as f:
+            f.write("WRF master link operational")
+
