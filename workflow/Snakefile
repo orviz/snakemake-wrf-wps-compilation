@@ -223,6 +223,8 @@ rule create_wrf_master_link:
 
         target_dir = WRF_INSTALL_DIR
 
+        Path(target_dir).parent.mkdir(parents=True, exist_ok=True)
+
         if Path(target_dir).is_symlink():
             Path(target_dir).unlink()
         elif os.path.exists(target_dir):
