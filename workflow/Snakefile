@@ -121,7 +121,7 @@ rule audit_wrf_status:
 # COMPILATION RULES: Compile WPS and WRF using EasyBuild recipes and generate executables
 # =============================================================================================
 
-rule compile_wrf_via_eb:
+rule compile_wrf:
     input:
         wps_json = "audit/WPS_status.json",
         wrf_json = "audit/WRF_status.json"
@@ -149,7 +149,7 @@ rule compile_wrf_via_eb:
             '{params.install_dir}'
         """
 
-rule compile_wps_via_eb:
+rule compile_wps:
     input:
         wps_json  = "audit/WPS_status.json",
         wrf_json  = "audit/WRF_status.json",
