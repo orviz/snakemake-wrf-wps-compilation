@@ -31,6 +31,8 @@ set -u
 export EASYBUILD_PREFIX="$INSTALL_DIR"
 export EASYBUILD_INSTALLPATH="$INSTALL_DIR"
 
+export EASYBUILD_STICKY_BIT=0
+
 # Core threading and memory mitigation flags for subprocess scheduling
 export EASYBUILD_PARALLEL="$NUM_THREADS"
 export J="$NUM_THREADS"
