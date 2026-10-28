@@ -65,6 +65,11 @@ else:
 
 print(f"[DAG Initialize] Tuning pipeline using engine: {ENGINE_TYPE.upper()}")
 
+# =========== #
+# LOCAL RULES #
+# =========== #
+localrules: audit_wps_status, audit_wrf_status, create_wps_master_link, create_wrf_master_link
+
 # =================================================================================================================
 # TARGET RULE: La regla maestra que exige las salidas de las reglas de enlace final
 # =================================================================================================================
