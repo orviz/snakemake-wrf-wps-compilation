@@ -5,8 +5,8 @@ set -euo pipefail
 # ==================================== #
 # 1. Parse & Validate Input Parameters #
 # ==================================== #
-if [[ $# -ne 7 ]]; then
-    echo "Usage: $0 <environment_type> <environment_init_script> <engine_type> <status_json> <local_recipe_path> <num_threads> <install_dir>" >&2
+if [[ $# -ne 8 ]]; then
+    echo "Usage: $0 <environment_type> <environment_init_script> <engine_type> <status_json> <local_recipe_path> <num_threads> <install_dir> <force_rebuild>" >&2
     exit 2
 fi
 
@@ -174,6 +174,7 @@ build_easybuild() {
         --local-var-naming-check=warn
         --skip-test-step
         --detect-loaded-modules=purge
+        --disable-read-only-installdir
     )
 
     if [[ "$FORCE_REBUILD" == "true" ]]; then
