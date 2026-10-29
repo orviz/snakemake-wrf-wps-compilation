@@ -8,19 +8,28 @@ wps_version: "4.6.0"
 wps_install_dir: "WPS"
 wrf_install_dir: "WRF"
 
-# The installation engine to use for building WPS and WRF (check the documentation for supported engines).
-# A section for the selected engine MUST be provided below (e.g., 'easybuild').
-installation_engine: "easybuild"
+environment:
+  type: "eessi" # The type of environment to use for the compilation: eessi | custom
+  eessi:
+    init_script: "/cvmfs/software.eessi.io/versions/2025.06/init/bash" # The path to the EESSI init script to load the environment.
+  custom:
+    init_script: "" # The path to a custom init script to load the environment. This is only used if 'type' is set to 'custom'.
 
-# The configuration for 'easybuild' installation engine.
-easybuild:
-  toolchain_name: "foss" # toolchain name (e.g., foss, intel, etc.)
-  toolchain_version: "2024a" # toolchain version (e.g., 2024a, 2023b, etc.)
-  toolchain_type: "dmpar" # toolchain type (e.g., dmpar, serial, etc.)
+# Selection of the installation engine to use for building WPS and WRF and the parameters thereof.
+engine:
+  # The type of installation engine to use for building WPS and WRF: easybuild | custom
+  type: "easybuild"
 
-  # OPTIONAL: subdirectory structure for WPS and WRF installations used by the 'installation_engine' (e.g. easybuild).
-  #Default values are the standard paths used by the engine.
-  # wps_subdir: "software/WPS/{wps_version}-{toolchain_name}-{toolchain_version}-{toolchain_type}/WPS-{wps_version}"
-  # wrf_subdir: "software/WRF/{wrf_version}-{toolchain_name}-{toolchain_version}-{toolchain_type}/WRFV{wrf_version}"
+  # Easybuild configuration parameters.
+  easybuild:
+    # The name of the toolchain to use for building WPS and WRF (e.g., foss, intel, etc.).
+    toolchain_name: "foss"
+    # The version of the toolchain to use for building WPS and WRF (e.g., 2024a, 2023b, etc.).
+    toolchain_version: "2024a"
+    # The type of the toolchain to use for building WPS and WRF (e.g., dmpar, serial, etc.).
+    toolchain_type: "dmpar"
 
-eessi_init_script: "/cvmfs/software.eessi.io/versions/2025.06/init/bash"
+    # OPTIONAL: subdirectory structure for WPS and WRF installations used by the 'installation_engine' (e.g. easybuild).
+    # Default values are the standard paths used by the engine.
+    # wps_subdir: "software/WPS/{wps_version}-{toolchain_name}-{toolchain_version}-{toolchain_type}/WPS-{wps_version}"
+    # wrf_subdir: "software/WRF/{wrf_version}-{toolchain_name}-{toolchain_version}-{toolchain_type}/WRFV{wrf_version}"

@@ -6,20 +6,21 @@ from snakemake.exceptions import WorkflowError
 
 configfile: "config/config.yaml"
 
-# =================================================================================
-# 1. ENVIRONMENT CONFIG GATHERING: Carga inicial de variables globales
-# =================================================================================
-EESSI_INIT      = config["eessi_init_script"]
+# ========================== #
+# 1. WRF/WPS Configuration   #
+# ========================== #
 WRF_VER         = config["wrf_version"]
 WPS_VER         = config["wps_version"]
 WRF_INSTALL_DIR = config["wrf_install_dir"]
 WPS_INSTALL_DIR = config["wps_install_dir"]
 
-# ==========================================================================================================
-# 2. COMPILATION ENGINE CONFIG VALIDATION: Verificación del motor de compilación seleccionado
-# ==========================================================================================================
+# ================================================= #
+# 2. Installation Engine Configuration & Validation #
+# ================================================= #
+ENGINE_CONFIG = config.get("engine", {})
+ENGINE_TYPE = ENGINE_CONFIG.get("type", "easybuild").lower()
+
 SUPPORTED_ENGINES = ["easybuild"]
-ENGINE_TYPE = config.get("installation_engine", "easybuild").lower()
 
 if ENGINE_TYPE not in SUPPORTED_ENGINES:
     raise WorkflowError(
@@ -27,11 +28,11 @@ if ENGINE_TYPE not in SUPPORTED_ENGINES:
         f"Currently supported engines are: {SUPPORTED_ENGINES}\n"
     )
 
-ENGINE_PARAMS = config.get(ENGINE_TYPE, {})
+ENGINE_PARAMS = ENGINE_CONFIG.get(ENGINE_TYPE, {})
 
-# =================================================================================
-# 3. ENGINE PATH RESOLUTION: Construcción limpia de las subrutas del motor
-# =================================================================================
+# ========================= #
+# 3. Engine Path Resolution #
+# ========================= #
 if ENGINE_TYPE == "easybuild":
     TC_NAME = ENGINE_PARAMS.get("toolchain_name", "foss")
     TC_VER  = ENGINE_PARAMS.get("toolchain_version", "2024a")
@@ -39,8 +40,17 @@ if ENGINE_TYPE == "easybuild":
 
     TC_SUFFIX = f"-{TC_NAME}-{TC_VER}-{TC_TYPE}"
 
-    WPS_SUBDIR_TEMPLATE = ENGINE_PARAMS.get("wps_subdir") or "software/WPS/{wps_version}-{toolchain_name}-{toolchain_version}-{toolchain_type}/WPS-{wps_version}"
-    WRF_SUBDIR_TEMPLATE = ENGINE_PARAMS.get("wrf_subdir") or "software/WRF/{wrf_version}-{toolchain_name}-{toolchain_version}-{toolchain_type}/WRFV{wrf_version}"
+    WPS_SUBDIR_TEMPLATE = (
+        ENGINE_PARAMS.get("wps_subdir")
+        or "software/WPS/{wps_version}-{toolchain_name}-"
+           "{toolchain_version}-{toolchain_type}/WPS-{wps_version}"
+    )
+
+    WRF_SUBDIR_TEMPLATE = (
+        ENGINE_PARAMS.get("wrf_subdir")
+        or "software/WRF/{wrf_version}-{toolchain_name}-"
+           "{toolchain_version}-{toolchain_type}/WRFV{wrf_version}"
+    )
 
     ENGINE_WPS_SUBDIR = WPS_SUBDIR_TEMPLATE.format(
         wps_version=WPS_VER,
@@ -63,11 +73,36 @@ else:
     ENGINE_WPS_ROOT = ENGINE_PARAMS.get("wps_subdir", "").rstrip("/")
     ENGINE_WRF_ROOT = ENGINE_PARAMS.get("wrf_subdir", "").rstrip("/")
 
-print(f"[WRF/WPS Compilation Module] Using engine: {ENGINE_TYPE.upper()}")
+print(f"[WRF/WPS Compilation Module] Using Engine: {ENGINE_TYPE.upper()}")
 
-# =================================================================================================================
-# TARGET RULE: La regla maestra que exige las salidas de las reglas de enlace final
-# =================================================================================================================
+# ================================================== #
+# 4. Software Environment Configuration & Validation #
+# ================================================== #
+ENV_CONFIG = config.get("environment", {})
+ENV_TYPE = ENV_CONFIG.get("type", "custom").lower()
+
+SUPPORTED_ENVIRONMENTS = ["eessi", "custom"]
+
+if ENV_TYPE not in SUPPORTED_ENVIRONMENTS:
+    raise WorkflowError(
+        f"\n[ERROR] Software environment '{ENV_TYPE}' is not supported.\n"
+        f"Currently supported software environments are: {SUPPORTED_ENVIRONMENTS}\n"
+    )
+
+ENV_PARAMS = ENV_CONFIG.get(ENV_TYPE, {})
+ENV_INIT_SCRIPT = ENV_PARAMS.get("init_script")
+
+if ENV_TYPE == "eessi" and not ENV_INIT_SCRIPT:
+    raise WorkflowError(
+        "Configuration parameter 'environment:eessi:init_script' is required "
+        "when environment type is 'eessi'."
+    )
+
+print(f"[WRF/WPS Compilation Module] Using Software Environment: {ENV_TYPE.upper()}")
+
+# ========================================================================================================= #
+# TARGET RULE: Ensure that all required WPS and WRF executables are present in the installation directories #
+# ========================================================================================================= #
 rule all:
     input:
         f"{WPS_INSTALL_DIR}/ungrib.exe",
@@ -76,22 +111,26 @@ rule all:
         f"{WRF_INSTALL_DIR}/main/real.exe",
         f"{WRF_INSTALL_DIR}/main/wrf.exe"
 
-# =============================================================================================
-# AUDIT RULES: Verify the status of WPS and WRF installations and generate JSON reports
-# =============================================================================================
+# ===================================================================================== #
+# AUDIT RULES: Verify the status of WPS and WRF installations and generate JSON reports #
+# ===================================================================================== #
 rule audit_wps_status:
     output:
         json_report = "audit/WPS_status.json"
     params:
-        eessi_init = EESSI_INIT,
-        version    = WPS_VER,
-        tc_suffix  = TC_SUFFIX,
-        script     = workflow.source_path("scripts/audit.sh")
+        environment_type = ENV_TYPE,
+        environment_init = ENV_INIT_SCRIPT or "",
+        engine_type      = ENGINE_TYPE,
+        version          = WPS_VER,
+        tc_suffix        = TC_SUFFIX,
+        script           = workflow.source_path("scripts/audit.sh")
     threads: 1
     shell:
         """
         bash '{params.script}' \
-            '{params.eessi_init}' \
+            '{params.environment_type}' \
+            '{params.environment_init}' \
+            '{params.engine_type}' \
             'WPS' \
             '{params.version}' \
             '{params.tc_suffix}' \
@@ -102,24 +141,28 @@ rule audit_wrf_status:
     output:
         json_report = "audit/WRF_status.json"
     params:
-        eessi_init = EESSI_INIT,
-        version    = WRF_VER,
-        tc_suffix  = TC_SUFFIX,
-        script     = workflow.source_path("scripts/audit.sh")
+        environment_type = ENV_TYPE,
+        environment_init = ENV_INIT_SCRIPT or "",
+        engine_type      = ENGINE_TYPE,
+        version          = WRF_VER,
+        tc_suffix        = TC_SUFFIX,
+        script           = workflow.source_path("scripts/audit.sh")
     threads: 1
     shell:
         """
         bash '{params.script}' \
-            '{params.eessi_init}' \
+            '{params.environment_type}' \
+            '{params.environment_init}' \
+            '{params.engine_type}' \
             'WRF' \
             '{params.version}' \
             '{params.tc_suffix}' \
             '{output.json_report}'
         """
 
-# =============================================================================================
-# COMPILATION RULES: Compile WPS and WRF using EasyBuild recipes and generate executables
-# =============================================================================================
+# ======================================================================================= #
+# COMPILATION RULES: Compile WPS and WRF using EasyBuild recipes and generate executables #
+# ======================================================================================= #
 
 rule compile_wrf:
     input:
@@ -131,20 +174,24 @@ rule compile_wrf:
     log:
         "logs/compile_WRF.log"
     params:
-        eessi_init   = EESSI_INIT,
-        status_json  = "audit/WRF_status.json",
-        local_recipe = os.path.abspath(f"config/WRF-{WRF_VER}{TC_SUFFIX}.eb"),
-        install_dir  = os.path.abspath(".easybuild"),
-        script       = workflow.source_path("scripts/compile.sh")
+        environment_type = ENV_TYPE,
+        environment_init = ENV_INIT_SCRIPT or "",
+        engine_type      = ENGINE_TYPE,
+        status_json      = "audit/WRF_status.json",
+        local_recipe     = os.path.abspath(
+            f"config/WRF-{WRF_VER}{TC_SUFFIX}.eb"
+        ),
+        install_dir      = os.path.abspath(".easybuild"),
+        script           = workflow.source_path("scripts/compile.sh")
     threads: 8
     shell:
         """
-        set -x
         bash '{params.script}' \
-            '{params.eessi_init}' \
+            '{params.environment_type}' \
+            '{params.environment_init}' \
+            '{params.engine_type}' \
             '{params.status_json}' \
             '{params.local_recipe}' \
-            'WRF' \
             '{threads}' \
             '{params.install_dir}'
         """
@@ -153,7 +200,7 @@ rule compile_wps:
     input:
         wps_json  = "audit/WPS_status.json",
         wrf_json  = "audit/WRF_status.json",
-        wrf_ready = f"{ENGINE_WRF_ROOT}/main/wrf.exe", # Espera al binario real del motor
+        wrf_ready = f"{ENGINE_WRF_ROOT}/main/wrf.exe",
     output:
         geogrid_bin = f"{ENGINE_WPS_ROOT}/geogrid.exe",
         ungrib_bin  = f"{ENGINE_WPS_ROOT}/ungrib.exe",
@@ -161,27 +208,31 @@ rule compile_wps:
     log:
         "logs/compile_WPS.log"
     params:
-        eessi_init   = EESSI_INIT,
-        status_json  = "audit/WPS_status.json",
-        local_recipe = os.path.abspath(f"config/WPS-{WPS_VER}{TC_SUFFIX}.eb"),
-        install_dir  = os.path.abspath(".easybuild"),
-        script       = workflow.source_path("scripts/compile.sh")
+        environment_type = ENV_TYPE,
+        environment_init = ENV_INIT_SCRIPT or "",
+        engine_type      = ENGINE_TYPE,
+        status_json      = "audit/WPS_status.json",
+        local_recipe     = os.path.abspath(
+            f"config/WPS-{WPS_VER}{TC_SUFFIX}.eb"
+        ),
+        install_dir      = os.path.abspath(".easybuild"),
+        script           = workflow.source_path("scripts/compile.sh")
     threads: 8
     shell:
         """
-        set -x
         bash '{params.script}' \
-            '{params.eessi_init}' \
+            '{params.environment_type}' \
+            '{params.environment_init}' \
+            '{params.engine_type}' \
             '{params.status_json}' \
             '{params.local_recipe}' \
-            'WPS' \
             '{threads}' \
             '{params.install_dir}'
         """
 
-# =================================================================================================================
-# LINKING RULES: Create symbolic links to the compiled WPS and WRF executables in the installation directories
-# =================================================================================================================
+# ============================================================================================================ #
+# LINKING RULES: Create symbolic links to the compiled WPS and WRF executables in the installation directories #
+# ============================================================================================================ #
 
 rule create_wps_master_link:
     input:
@@ -233,4 +284,3 @@ rule create_wrf_master_link:
 
         with open(output.wrf_ready, "w") as f:
             f.write("WRF master link operational")
-
