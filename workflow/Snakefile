@@ -105,7 +105,6 @@ print(f"[WRF/WPS Compilation Module] Using Software Environment: {ENV_TYPE.upper
 # ======= #
 
 def create_master_link(target_dir, source_dir, remove_existing=False):
-    import os
     import shutil
     from pathlib import Path
     from snakemake.exceptions import WorkflowError
@@ -122,8 +121,12 @@ def create_master_link(target_dir, source_dir, remove_existing=False):
     # Ensure the parent directory exists.
     target.parent.mkdir(parents=True, exist_ok=True)
 
+    if target.is_symlink() and target.resolve() == source:
+        print(f"[Link] Link is correct: {target} -> {source}")
+        return
+
     if target.is_symlink():
-        # Replace an existing symbolic link.
+        print(f"[Link] Replace incorrect link: {target}")
         target.unlink()
 
     elif target.exists():
@@ -156,18 +159,49 @@ def create_master_link(target_dir, source_dir, remove_existing=False):
 
     target.symlink_to(source, target_is_directory=True)
 
-    print(f"[Link] {target} -> {source}")
+    print(f"[Link] Created link: {target} -> {source}")
+
+def reconcile_existing_link(target_dir, source_dir, remove_existing=False):
+    source = Path(source_dir)
+
+    # In a initial compilation, the installation may not exist yet.
+    # The link rule will create it when it becomes available.
+    if source.is_dir():
+        create_master_link(
+            target_dir,
+            source_dir,
+            remove_existing=remove_existing,
+        )
+
+
+def reconcile_master_links():
+    remove_existing = config.get("links", {}).get(
+        "remove_existing_directories", False
+    )
+
+    reconcile_existing_link(
+        WPS_INSTALL_DIR,
+        ENGINE_WPS_ROOT,
+        remove_existing,
+    )
+    reconcile_existing_link(
+        WRF_INSTALL_DIR,
+        ENGINE_WRF_ROOT,
+        remove_existing,
+    )
+
+# On each workflow execution: If the installations already exist, check and fix the links before running the jobs.
+# If they don't exist yet because it's the first compilation, let the compilation and linking rules handle it.
+onstart:
+    reconcile_master_links()
 
 # ========================================================================================================= #
 # TARGET RULE: Ensure that all required WPS and WRF executables are present in the installation directories #
 # ========================================================================================================= #
 rule all:
     input:
-        f"{WPS_INSTALL_DIR}/ungrib.exe",
-        f"{WPS_INSTALL_DIR}/geogrid.exe",
-        f"{WPS_INSTALL_DIR}/metgrid.exe",
-        f"{WRF_INSTALL_DIR}/main/real.exe",
-        f"{WRF_INSTALL_DIR}/main/wrf.exe"
+        "audit/wps_link_ready.txt",
+        "audit/wrf_link_ready.txt"
 
 # ===================================================================================== #
 # AUDIT RULES: Verify the status of WPS and WRF installations and generate JSON reports #
