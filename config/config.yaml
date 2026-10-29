@@ -1,10 +1,12 @@
 ---
 
-# Versions of WPS and WRF to be installed. These versions will be used to download the source code from the official repositories.
+# Versions of WPS and WRF to be installed.
+# NOTE: These versions will be used to download the source code from the official repositories.
 wrf_version: "4.6.1"
 wps_version: "4.6.0"
 
-# The target installation directories for WPS and WRF. These are the directories where the software will be linked after compilation.
+# The target installation directories for WPS and WRF.
+# NOTE: These are the directories where the software will be linked after compilation.
 wps_install_dir: "WPS"
 wrf_install_dir: "WRF"
 
@@ -12,6 +14,10 @@ wrf_install_dir: "WRF"
 # WARNING: Enabling this option may permanently delete the target directories.
 links:
   remove_existing_directories: false
+
+# Whether to force a rebuild of WPS and WRF even if they are already installed.
+# WARNING: If set to true, the existing installations will be removed and rebuilt.
+force_rebuild: false
 
 environment:
   type: "eessi" # The type of environment to use for the compilation: eessi | custom

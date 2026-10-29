@@ -274,7 +274,8 @@ rule compile_wrf:
             f"config/WRF-{WRF_VER}{TC_SUFFIX}.eb"
         ),
         install_dir      = os.path.abspath(".easybuild"),
-        script           = workflow.source_path("scripts/compile.sh")
+        script           = workflow.source_path("scripts/compile.sh"),
+        force_rebuild    = config.get("force_rebuild", False)
     threads: 8
     shell:
         """
@@ -285,7 +286,8 @@ rule compile_wrf:
             '{params.status_json}' \
             '{params.local_recipe}' \
             '{threads}' \
-            '{params.install_dir}'
+            '{params.install_dir}' \
+            '{params.force_rebuild}'
         """
 
 rule compile_wps:
@@ -308,7 +310,8 @@ rule compile_wps:
             f"config/WPS-{WPS_VER}{TC_SUFFIX}.eb"
         ),
         install_dir      = os.path.abspath(".easybuild"),
-        script           = workflow.source_path("scripts/compile.sh")
+        script           = workflow.source_path("scripts/compile.sh"),
+        force_rebuild    = config.get("force_rebuild", False)
     threads: 8
     shell:
         """
@@ -319,7 +322,8 @@ rule compile_wps:
             '{params.status_json}' \
             '{params.local_recipe}' \
             '{threads}' \
-            '{params.install_dir}'
+            '{params.install_dir}' \
+            '{params.force_rebuild}'
         """
 
 # ============================================================================================================ #

@@ -17,6 +17,7 @@ STATUS_JSON="$4"
 LOCAL_RECIPE_PATH="$5"
 NUM_THREADS="$6"
 INSTALL_DIR="$7"
+FORCE_REBUILD="$8"
 
 if [[ ! -f "$STATUS_JSON" ]]; then
     echo "ERROR: Audit report not found: $STATUS_JSON" >&2
@@ -166,15 +167,20 @@ build_easybuild() {
             ;;
     esac
 
-    eb "$recipe_path" \
-        --robot \
-        --parallel="$NUM_THREADS" \
-        --local-var-naming-check=warn \
-        --skip-test-step \
-        --detect-loaded-modules=purge \
-        "${recipe_args[@]}" \
-        --rebuild \
-        --force
+
+    eb_args=(
+        --robot
+        --parallel="$NUM_THREADS"
+        --local-var-naming-check=warn
+        --skip-test-step
+        --detect-loaded-modules=purge
+    )
+
+    if [[ "$FORCE_REBUILD" == "true" ]]; then
+        eb_args+=(--rebuild --force)
+    fi
+
+    eb "$recipe_path" "${eb_args[@]}" "${recipe_args[@]}"
 }
 
 # ================= #

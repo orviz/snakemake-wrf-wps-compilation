@@ -20,6 +20,7 @@ tcsh = "*"
 # Local
 dry-run   = "snakemake --dry-run"
 run-local = "snakemake --cores all"
+rebuild   = "snakemake --cores all --forcerun compile_wrf compile_wps --config force_rebuild=true"
 # Generic Slurm
 run-slurm = "snakemake --profile"
 # HPC profiles
