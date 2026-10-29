@@ -6,20 +6,21 @@ from snakemake.exceptions import WorkflowError
 
 configfile: "config/config.yaml"
 
-# =================================================================================
-# 1. ENVIRONMENT CONFIG GATHERING: Carga inicial de variables globales
-# =================================================================================
-EESSI_INIT      = config["eessi_init_script"]
+# ========================== #
+# 1. WRF/WPS Configuration   #
+# ========================== #
 WRF_VER         = config["wrf_version"]
 WPS_VER         = config["wps_version"]
 WRF_INSTALL_DIR = config["wrf_install_dir"]
 WPS_INSTALL_DIR = config["wps_install_dir"]
 
-# ==========================================================================================================
-# 2. COMPILATION ENGINE CONFIG VALIDATION: Verificación del motor de compilación seleccionado
-# ==========================================================================================================
+# ================================================= #
+# 2. Installation Engine Configuration & Validation #
+# ================================================= #
+ENGINE_CONFIG = config.get("engine", {})
+ENGINE_TYPE = ENGINE_CONFIG.get("type", "easybuild").lower()
+
 SUPPORTED_ENGINES = ["easybuild"]
-ENGINE_TYPE = config.get("installation_engine", "easybuild").lower()
 
 if ENGINE_TYPE not in SUPPORTED_ENGINES:
     raise WorkflowError(
@@ -27,11 +28,11 @@ if ENGINE_TYPE not in SUPPORTED_ENGINES:
         f"Currently supported engines are: {SUPPORTED_ENGINES}\n"
     )
 
-ENGINE_PARAMS = config.get(ENGINE_TYPE, {})
+ENGINE_PARAMS = ENGINE_CONFIG.get(ENGINE_TYPE, {})
 
-# =================================================================================
-# 3. ENGINE PATH RESOLUTION: Construcción limpia de las subrutas del motor
-# =================================================================================
+# ========================= #
+# 3. Engine Path Resolution #
+# ========================= #
 if ENGINE_TYPE == "easybuild":
     TC_NAME = ENGINE_PARAMS.get("toolchain_name", "foss")
     TC_VER  = ENGINE_PARAMS.get("toolchain_version", "2024a")
@@ -39,8 +40,17 @@ if ENGINE_TYPE == "easybuild":
 
     TC_SUFFIX = f"-{TC_NAME}-{TC_VER}-{TC_TYPE}"
 
-    WPS_SUBDIR_TEMPLATE = ENGINE_PARAMS.get("wps_subdir") or "software/WPS/{wps_version}-{toolchain_name}-{toolchain_version}-{toolchain_type}/WPS-{wps_version}"
-    WRF_SUBDIR_TEMPLATE = ENGINE_PARAMS.get("wrf_subdir") or "software/WRF/{wrf_version}-{toolchain_name}-{toolchain_version}-{toolchain_type}/WRFV{wrf_version}"
+    WPS_SUBDIR_TEMPLATE = (
+        ENGINE_PARAMS.get("wps_subdir")
+        or "software/WPS/{wps_version}-{toolchain_name}-"
+           "{toolchain_version}-{toolchain_type}/WPS-{wps_version}"
+    )
+
+    WRF_SUBDIR_TEMPLATE = (
+        ENGINE_PARAMS.get("wrf_subdir")
+        or "software/WRF/{wrf_version}-{toolchain_name}-"
+           "{toolchain_version}-{toolchain_type}/WRFV{wrf_version}"
+    )
 
     ENGINE_WPS_SUBDIR = WPS_SUBDIR_TEMPLATE.format(
         wps_version=WPS_VER,
@@ -63,35 +73,156 @@ else:
     ENGINE_WPS_ROOT = ENGINE_PARAMS.get("wps_subdir", "").rstrip("/")
     ENGINE_WRF_ROOT = ENGINE_PARAMS.get("wrf_subdir", "").rstrip("/")
 
-print(f"[DAG Initialize] Tuning pipeline using engine: {ENGINE_TYPE.upper()}")
+print(f"[WRF/WPS Compilation Module] Using Engine: {ENGINE_TYPE.upper()}")
 
-# =================================================================================================================
-# TARGET RULE: La regla maestra que exige las salidas de las reglas de enlace final
-# =================================================================================================================
+# ================================================== #
+# 4. Software Environment Configuration & Validation #
+# ================================================== #
+ENV_CONFIG = config.get("environment", {})
+ENV_TYPE = ENV_CONFIG.get("type", "custom").lower()
+
+SUPPORTED_ENVIRONMENTS = ["eessi", "custom"]
+
+if ENV_TYPE not in SUPPORTED_ENVIRONMENTS:
+    raise WorkflowError(
+        f"\n[ERROR] Software environment '{ENV_TYPE}' is not supported.\n"
+        f"Currently supported software environments are: {SUPPORTED_ENVIRONMENTS}\n"
+    )
+
+ENV_PARAMS = ENV_CONFIG.get(ENV_TYPE, {})
+ENV_INIT_SCRIPT = ENV_PARAMS.get("init_script")
+
+if ENV_TYPE == "eessi" and not ENV_INIT_SCRIPT:
+    raise WorkflowError(
+        "Configuration parameter 'environment:eessi:init_script' is required "
+        "when environment type is 'eessi'."
+    )
+
+print(f"[WRF/WPS Compilation Module] Using Software Environment: {ENV_TYPE.upper()}")
+
+# ======= #
+# Methods #
+# ======= #
+
+def create_master_link(target_dir, source_dir, remove_existing=False):
+    import shutil
+    from pathlib import Path
+    from snakemake.exceptions import WorkflowError
+
+    target = Path(target_dir)
+    source = Path(source_dir).resolve()
+
+    # Verify that the source exists.
+    if not source.is_dir():
+        raise WorkflowError(
+            f"Link source does not exist or is not a directory: {source}"
+        )
+
+    # Ensure the parent directory exists.
+    target.parent.mkdir(parents=True, exist_ok=True)
+
+    if target.is_symlink() and target.resolve() == source:
+        print(f"[Link] Link is correct: {target} -> {source}")
+        return
+
+    if target.is_symlink():
+        print(f"[Link] Replace incorrect link: {target}")
+        target.unlink()
+
+    elif target.exists():
+        if not target.is_dir():
+            raise WorkflowError(
+                f"Link destination exists and is not a directory: {target}"
+            )
+
+        if not remove_existing:
+            raise WorkflowError(
+                f"################################################################\n"
+                f"\nDestination '{target}' already exists as a real directory.\n"
+                f"It has NOT been deleted.\n\n"
+                f"To resolve this manually, inspect its contents and then:\n"
+                f"  1. Back up any data you need.\n"
+                f"  2. Rename or move the directory, for example:\n"
+                f"     mv '{target}' '{target}.backup'\n"
+                f"  3. Re-run the Snakemake workflow.\n\n"
+                f"Alternatively, enable 'links:remove_existing_directories' in "
+                f"config.yaml, understanding that this may permanently delete "
+                f"data."
+                f"################################################################\n"
+            )
+
+        print(
+            f"[WARNING] Removing existing directory '{target}' "
+            f"because 'links.remove_existing_directories' parameter is enabled in config.yaml."
+        )
+        shutil.rmtree(target)
+
+    target.symlink_to(source, target_is_directory=True)
+
+    print(f"[Link] Created link: {target} -> {source}")
+
+def reconcile_existing_link(target_dir, source_dir, remove_existing=False):
+    source = Path(source_dir)
+
+    # In a initial compilation, the installation may not exist yet.
+    # The link rule will create it when it becomes available.
+    if source.is_dir():
+        create_master_link(
+            target_dir,
+            source_dir,
+            remove_existing=remove_existing,
+        )
+
+
+def reconcile_master_links():
+    remove_existing = config.get("links", {}).get(
+        "remove_existing_directories", False
+    )
+
+    reconcile_existing_link(
+        WPS_INSTALL_DIR,
+        ENGINE_WPS_ROOT,
+        remove_existing,
+    )
+    reconcile_existing_link(
+        WRF_INSTALL_DIR,
+        ENGINE_WRF_ROOT,
+        remove_existing,
+    )
+
+# On each workflow execution: If the installations already exist, check and fix the links before running the jobs.
+# If they don't exist yet because it's the first compilation, let the compilation and linking rules handle it.
+onstart:
+    reconcile_master_links()
+
+# ========================================================================================================= #
+# TARGET RULE: Ensure that all required WPS and WRF executables are present in the installation directories #
+# ========================================================================================================= #
 rule all:
     input:
-        f"{WPS_INSTALL_DIR}/ungrib.exe",
-        f"{WPS_INSTALL_DIR}/geogrid.exe",
-        f"{WPS_INSTALL_DIR}/metgrid.exe",
-        f"{WRF_INSTALL_DIR}/main/real.exe",
-        f"{WRF_INSTALL_DIR}/main/wrf.exe"
+        "audit/wps_link_ready.txt",
+        "audit/wrf_link_ready.txt"
 
-# =============================================================================================
-# AUDIT RULES: Verify the status of WPS and WRF installations and generate JSON reports
-# =============================================================================================
+# ===================================================================================== #
+# AUDIT RULES: Verify the status of WPS and WRF installations and generate JSON reports #
+# ===================================================================================== #
 rule audit_wps_status:
     output:
         json_report = "audit/WPS_status.json"
     params:
-        eessi_init = EESSI_INIT,
-        version    = WPS_VER,
-        tc_suffix  = TC_SUFFIX,
-        script     = workflow.source_path("scripts/audit.sh")
+        environment_type = ENV_TYPE,
+        environment_init = ENV_INIT_SCRIPT or "",
+        engine_type      = ENGINE_TYPE,
+        version          = WPS_VER,
+        tc_suffix        = TC_SUFFIX,
+        script           = workflow.source_path("scripts/audit.sh")
     threads: 1
     shell:
         """
         bash '{params.script}' \
-            '{params.eessi_init}' \
+            '{params.environment_type}' \
+            '{params.environment_init}' \
+            '{params.engine_type}' \
             'WPS' \
             '{params.version}' \
             '{params.tc_suffix}' \
@@ -102,24 +233,28 @@ rule audit_wrf_status:
     output:
         json_report = "audit/WRF_status.json"
     params:
-        eessi_init = EESSI_INIT,
-        version    = WRF_VER,
-        tc_suffix  = TC_SUFFIX,
-        script     = workflow.source_path("scripts/audit.sh")
+        environment_type = ENV_TYPE,
+        environment_init = ENV_INIT_SCRIPT or "",
+        engine_type      = ENGINE_TYPE,
+        version          = WRF_VER,
+        tc_suffix        = TC_SUFFIX,
+        script           = workflow.source_path("scripts/audit.sh")
     threads: 1
     shell:
         """
         bash '{params.script}' \
-            '{params.eessi_init}' \
+            '{params.environment_type}' \
+            '{params.environment_init}' \
+            '{params.engine_type}' \
             'WRF' \
             '{params.version}' \
             '{params.tc_suffix}' \
             '{output.json_report}'
         """
 
-# =============================================================================================
-# COMPILATION RULES: Compile WPS and WRF using EasyBuild recipes and generate executables
-# =============================================================================================
+# ======================================================================================= #
+# COMPILATION RULES: Compile WPS and WRF using EasyBuild recipes and generate executables #
+# ======================================================================================= #
 
 rule compile_wrf:
     input:
@@ -131,29 +266,35 @@ rule compile_wrf:
     log:
         "logs/compile_WRF.log"
     params:
-        eessi_init   = EESSI_INIT,
-        status_json  = "audit/WRF_status.json",
-        local_recipe = os.path.abspath(f"config/WRF-{WRF_VER}{TC_SUFFIX}.eb"),
-        install_dir  = os.path.abspath(".easybuild"),
-        script       = workflow.source_path("scripts/compile.sh")
+        environment_type = ENV_TYPE,
+        environment_init = ENV_INIT_SCRIPT or "",
+        engine_type      = ENGINE_TYPE,
+        status_json      = "audit/WRF_status.json",
+        local_recipe     = os.path.abspath(
+            f"config/WRF-{WRF_VER}{TC_SUFFIX}.eb"
+        ),
+        install_dir      = os.path.abspath(".easybuild"),
+        script           = workflow.source_path("scripts/compile.sh"),
+        force_rebuild    = config.get("force_rebuild", False)
     threads: 8
     shell:
         """
-        set -x
         bash '{params.script}' \
-            '{params.eessi_init}' \
+            '{params.environment_type}' \
+            '{params.environment_init}' \
+            '{params.engine_type}' \
             '{params.status_json}' \
             '{params.local_recipe}' \
-            'WRF' \
             '{threads}' \
-            '{params.install_dir}'
+            '{params.install_dir}' \
+            '{params.force_rebuild}'
         """
 
 rule compile_wps:
     input:
         wps_json  = "audit/WPS_status.json",
         wrf_json  = "audit/WRF_status.json",
-        wrf_ready = f"{ENGINE_WRF_ROOT}/main/wrf.exe", # Espera al binario real del motor
+        wrf_ready = f"{ENGINE_WRF_ROOT}/main/wrf.exe",
     output:
         geogrid_bin = f"{ENGINE_WPS_ROOT}/geogrid.exe",
         ungrib_bin  = f"{ENGINE_WPS_ROOT}/ungrib.exe",
@@ -161,27 +302,33 @@ rule compile_wps:
     log:
         "logs/compile_WPS.log"
     params:
-        eessi_init   = EESSI_INIT,
-        status_json  = "audit/WPS_status.json",
-        local_recipe = os.path.abspath(f"config/WPS-{WPS_VER}{TC_SUFFIX}.eb"),
-        install_dir  = os.path.abspath(".easybuild"),
-        script       = workflow.source_path("scripts/compile.sh")
+        environment_type = ENV_TYPE,
+        environment_init = ENV_INIT_SCRIPT or "",
+        engine_type      = ENGINE_TYPE,
+        status_json      = "audit/WPS_status.json",
+        local_recipe     = os.path.abspath(
+            f"config/WPS-{WPS_VER}{TC_SUFFIX}.eb"
+        ),
+        install_dir      = os.path.abspath(".easybuild"),
+        script           = workflow.source_path("scripts/compile.sh"),
+        force_rebuild    = config.get("force_rebuild", False)
     threads: 8
     shell:
         """
-        set -x
         bash '{params.script}' \
-            '{params.eessi_init}' \
+            '{params.environment_type}' \
+            '{params.environment_init}' \
+            '{params.engine_type}' \
             '{params.status_json}' \
             '{params.local_recipe}' \
-            'WPS' \
             '{threads}' \
-            '{params.install_dir}'
+            '{params.install_dir}' \
+            '{params.force_rebuild}'
         """
 
-# =================================================================================================================
-# LINKING RULES: Create symbolic links to the compiled WPS and WRF executables in the installation directories
-# =================================================================================================================
+# ============================================================================================================ #
+# LINKING RULES: Create symbolic links to the compiled WPS and WRF executables in the installation directories #
+# ============================================================================================================ #
 
 rule create_wps_master_link:
     input:
@@ -191,23 +338,18 @@ rule create_wps_master_link:
     output:
         wps_ready = "audit/wps_link_ready.txt"
     run:
-        from pathlib import Path
-        import os
-        import shutil
+        create_master_link(
+            WPS_INSTALL_DIR,
+            ENGINE_WPS_ROOT,
+            config.get("links", {}).get(
+                "remove_existing_directories", False
+            )
+        )
 
-        target_dir = WPS_INSTALL_DIR
-
-        if Path(target_dir).is_symlink():
-            Path(target_dir).unlink()
-        elif os.path.exists(target_dir):
-            if os.path.isdir(target_dir):
-                shutil.rmtree(target_dir)
-
-        Path(target_dir).parent.mkdir(parents=True, exist_ok=True)
-        Path(target_dir).symlink_to(Path(ENGINE_WPS_ROOT).resolve(), target_is_directory=True)
-
-        with open(output.wps_ready, "w") as f:
-            f.write("WPS master link operational")
+        Path(output.wps_ready).parent.mkdir(parents=True, exist_ok=True)
+        Path(output.wps_ready).write_text(
+            "WPS master link operational\n"
+        )
 
 rule create_wrf_master_link:
     input:
@@ -216,21 +358,15 @@ rule create_wrf_master_link:
     output:
         wrf_ready = "audit/wrf_link_ready.txt"
     run:
-        from pathlib import Path
-        import os
-        import shutil
+        create_master_link(
+            WRF_INSTALL_DIR,
+            ENGINE_WRF_ROOT,
+            config.get("links", {}).get(
+                "remove_existing_directories", False
+            )
+        )
 
-        target_dir = WRF_INSTALL_DIR
-
-        if Path(target_dir).is_symlink():
-            Path(target_dir).unlink()
-        elif os.path.exists(target_dir):
-            if os.path.isdir(target_dir):
-                shutil.rmtree(target_dir)
-
-        Path(target_dir).parent.mkdir(parents=True, exist_ok=True)
-        Path(target_dir).symlink_to(Path(ENGINE_WRF_ROOT).resolve(), target_is_directory=True)
-
-        with open(output.wrf_ready, "w") as f:
-            f.write("WRF master link operational")
-
+        Path(output.wrf_ready).parent.mkdir(parents=True, exist_ok=True)
+        Path(output.wrf_ready).write_text(
+            "WRF master link operational\n"
+        )
