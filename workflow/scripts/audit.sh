@@ -113,16 +113,48 @@ esac
 # 5. Write JSON Metadata Report #
 # ============================= #
 mkdir -p "$(dirname "$OUTPUT_JSON")"
-cat << EOF > "$OUTPUT_JSON"
-{
-  "software": "$SOFTWARE_NAME",
-  "version": "$SOFTWARE_VERSION",
-  "environment": "$ENVIRONMENT_TYPE",
-  "engine": "$ENGINE_TYPE",
-  "recipe_target": "$TARGET_RECIPE",
-  "status": "$STATUS",
-  "timestamp": "$(date -Iseconds)"
-}
-EOF
 
-echo "[Audit] Diagnostic available in $OUTPUT_JSON"
+python3 - \
+    "$SOFTWARE_NAME" \
+    "$SOFTWARE_VERSION" \
+    "$ENVIRONMENT_TYPE" \
+    "$ENGINE_TYPE" \
+    "$STATUS" \
+    "$OUTPUT_JSON" \
+    "${RECIPE_TARGET:-}" <<'PY'
+import json
+import sys
+from datetime import datetime, timezone
+from pathlib import Path
+
+(
+    software,
+    version,
+    environment,
+    engine,
+    status,
+    output_json,
+    recipe_target,
+) = sys.argv[1:]
+
+report = {
+    "software": software,
+    "version": version,
+    "environment": environment,
+    "engine": engine,
+    "status": status,
+    "timestamp": datetime.now(timezone.utc).isoformat(),
+}
+
+if engine == "easybuild":
+    report["recipe_target"] = recipe_target
+
+path = Path(output_json)
+path.parent.mkdir(parents=True, exist_ok=True)
+
+with path.open("w", encoding="utf-8") as f:
+    json.dump(report, f, indent=2)
+    f.write("\n")
+PY
+
+echo "[Audit] Diagnostic metadata available in $OUTPUT_JSON"
