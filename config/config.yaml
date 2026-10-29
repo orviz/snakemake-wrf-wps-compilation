@@ -8,6 +8,11 @@ wps_version: "4.6.0"
 wps_install_dir: "WPS"
 wrf_install_dir: "WRF"
 
+# Whether to remove existing real directories before creating master links.
+# WARNING: Enabling this option may permanently delete the target directories.
+links:
+  remove_existing_directories: false
+
 environment:
   type: "eessi" # The type of environment to use for the compilation: eessi | custom
   eessi:
