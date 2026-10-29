@@ -18,7 +18,7 @@ tcsh = "*"
 
 [tasks]
 # Local
-dry-run   = "snakemake --dry-run --profile"
+dry-run   = "snakemake --dry-run"
 run-local = "snakemake --cores all"
 # Generic Slurm
 run-slurm = "snakemake --profile"
