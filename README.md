@@ -83,6 +83,25 @@ The workflow constructs a 2-stage execution matrix:
 - **Thread Control (`*_NUM_THREADS=1`)**: manages thread spawning for math libraries.
 - **Stack Memory `(ulimit -s unlimited`)**: protects against segmentation faults.
 
+## Configuration (`config/config.yaml`)
+
+The workflow behavior, target software versions, and build environment are centralized in `config/config.yaml`. While the file includes inline documentation for every key, the most critical operational settings are summarized below:
+
+| Parameter | Default | Description |
+| :--- | :--- | :--- |
+| `wrf_version` / `wps_version` | `"4.6.1"` / `"4.6.0"` | Target versions to download and build. Must match an available EasyBuild recipe in `config/`. |
+| `wrf_install_dir` / `wps_install_dir` | `"WRF"` / `"WPS"` | Destination paths where the final symbolic links to the compiled engines will be exposed. |
+| `links.remove_existing_directories` | `false` | **Safety guard:** If `true`, existing real directories at the link destinations are automatically deleted. If `false`, the workflow halts to prevent accidental data loss. |
+| `force_rebuild` | `false` | Forces a clean recompilation even if valid installations already exist. |
+| `environment.type` | `"eessi"` | Selects the base software environment (`eessi` via CernVM-FS or a `custom` initialization script). |
+| `engine.type` | `"easybuild"` | Defines the build backend (`easybuild` or `custom`) and its associated compiler toolchain (`foss-2024a-dmpar`). |
+
+### Key Operational Behaviors
+
+* **Link Safety & Reconciliation:** On every startup (`onstart`), the workflow validates `wps_install_dir` and `wrf_install_dir`. If a real directory (not a symlink) occupies those paths, execution aborts with a `WorkflowError` unless `links.remove_existing_directories` is explicitly enabled.
+* **Customizing Paths:** For standard EasyBuild deployments, `wps_subdir` and `wrf_subdir` can remain commented out. Uncomment them only if your site uses a non-standard installation directory layout.
+* **CLI Overrides:** Any configuration parameter can be overridden at runtime without modifying `config.yaml` using the `--config` flag:
+
 ## Execution Guide
 
 ### 1. Configure CVMFS & Versions
