@@ -1,5 +1,4 @@
 import os
-import shutil
 from pathlib import Path
 
 from snakemake.exceptions import WorkflowError
@@ -100,100 +99,17 @@ if ENV_TYPE == "eessi" and not ENV_INIT_SCRIPT:
 
 print(f"[WRF/WPS Compilation Module] Using Software Environment: {ENV_TYPE.upper()}")
 
-# ======= #
-# Methods #
-# ======= #
-
-def create_master_link(target_dir, source_dir, remove_existing=False):
-    import shutil
-    from pathlib import Path
-    from snakemake.exceptions import WorkflowError
-
-    target = Path(target_dir)
-    source = Path(source_dir).resolve()
-
-    # Verify that the source exists.
-    if not source.is_dir():
-        raise WorkflowError(
-            f"Link source does not exist or is not a directory: {source}"
-        )
-
-    # Ensure the parent directory exists.
-    target.parent.mkdir(parents=True, exist_ok=True)
-
-    if target.is_symlink() and target.resolve() == source:
-        print(f"[Link] Link is correct: {target} -> {source}")
-        return
-
-    if target.is_symlink():
-        print(f"[Link] Replace incorrect link: {target}")
-        target.unlink()
-
-    elif target.exists():
-        if not target.is_dir():
-            raise WorkflowError(
-                f"Link destination exists and is not a directory: {target}"
-            )
-
-        if not remove_existing:
-            raise WorkflowError(
-                f"################################################################\n"
-                f"\nDestination '{target}' already exists as a real directory.\n"
-                f"It has NOT been deleted.\n\n"
-                f"To resolve this manually, inspect its contents and then:\n"
-                f"  1. Back up any data you need.\n"
-                f"  2. Rename or move the directory, for example:\n"
-                f"     mv '{target}' '{target}.backup'\n"
-                f"  3. Re-run the Snakemake workflow.\n\n"
-                f"Alternatively, enable 'links:remove_existing_directories' in "
-                f"config.yaml, understanding that this may permanently delete "
-                f"data."
-                f"################################################################\n"
-            )
-
-        print(
-            f"[WARNING] Removing existing directory '{target}' "
-            f"because 'links.remove_existing_directories' parameter is enabled in config.yaml."
-        )
-        shutil.rmtree(target)
-
-    target.symlink_to(source, target_is_directory=True)
-
-    print(f"[Link] Created link: {target} -> {source}")
-
-def reconcile_existing_link(target_dir, source_dir, remove_existing=False):
-    source = Path(source_dir)
-
-    # In a initial compilation, the installation may not exist yet.
-    # The link rule will create it when it becomes available.
-    if source.is_dir():
-        create_master_link(
-            target_dir,
-            source_dir,
-            remove_existing=remove_existing,
-        )
-
-
-def reconcile_master_links():
-    remove_existing = config.get("links", {}).get(
-        "remove_existing_directories", False
-    )
-
-    reconcile_existing_link(
-        WPS_INSTALL_DIR,
-        ENGINE_WPS_ROOT,
-        remove_existing,
-    )
-    reconcile_existing_link(
-        WRF_INSTALL_DIR,
-        ENGINE_WRF_ROOT,
-        remove_existing,
-    )
 
 # On each workflow execution: If the installations already exist, check and fix the links before running the jobs.
 # If they don't exist yet because it's the first compilation, let the compilation and linking rules handle it.
+from rules.links import create_master_link, reconcile_existing_link
+
 onstart:
-    reconcile_master_links()
+    remove_existing = config.get("links", {}).get(
+        "remove_existing_directories", False
+    )
+    reconcile_existing_link(WPS_INSTALL_DIR, ENGINE_WPS_ROOT, remove_existing)
+    reconcile_existing_link(WRF_INSTALL_DIR, ENGINE_WRF_ROOT, remove_existing)
 
 
 # =========== #
@@ -343,13 +259,13 @@ rule create_wps_master_link:
         metgrid_bin = f"{ENGINE_WPS_ROOT}/metgrid.exe"
     output:
         wps_ready = "audit/wps_link_ready.txt"
+    params:
+        remove_existing = config.get("links", {}).get("remove_existing_directories", False)
     run:
         create_master_link(
             WPS_INSTALL_DIR,
             ENGINE_WPS_ROOT,
-            config.get("links", {}).get(
-                "remove_existing_directories", False
-            )
+            params.remove_existing
         )
 
         Path(output.wps_ready).parent.mkdir(parents=True, exist_ok=True)
@@ -363,13 +279,13 @@ rule create_wrf_master_link:
         wrf_bin  = f"{ENGINE_WRF_ROOT}/main/wrf.exe"
     output:
         wrf_ready = "audit/wrf_link_ready.txt"
+    params:
+        remove_existing = config.get("links", {}).get("remove_existing_directories", False)
     run:
         create_master_link(
             WRF_INSTALL_DIR,
             ENGINE_WRF_ROOT,
-            config.get("links", {}).get(
-                "remove_existing_directories", False
-            )
+            params.remove_existing
         )
 
         Path(output.wrf_ready).parent.mkdir(parents=True, exist_ok=True)
