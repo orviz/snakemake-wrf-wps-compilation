@@ -75,11 +75,8 @@ localrules: audit_wps_status, audit_wrf_status, create_wps_master_link, create_w
 # =================================================================================================================
 rule all:
     input:
-        f"{WPS_INSTALL_DIR}/ungrib.exe",
-        f"{WPS_INSTALL_DIR}/geogrid.exe",
-        f"{WPS_INSTALL_DIR}/metgrid.exe",
-        f"{WRF_INSTALL_DIR}/main/real.exe",
-        f"{WRF_INSTALL_DIR}/main/wrf.exe"
+        "audit/wps_link_ready.txt",
+        "audit/wrf_link_ready.txt"
 
 # =============================================================================================
 # AUDIT RULES: Verify the status of WPS and WRF installations and generate JSON reports
