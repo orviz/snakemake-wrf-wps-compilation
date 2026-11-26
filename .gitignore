@@ -21,3 +21,7 @@ logs/
 # Master links to produced software
 WPS
 WRF
+
+# Python bytecode and cache
+__pycache__/
+*.py[cod]
