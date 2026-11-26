@@ -195,9 +195,15 @@ def reconcile_master_links():
 onstart:
     reconcile_master_links()
 
-# ========================================================================================================= #
-# TARGET RULE: Ensure that all required WPS and WRF executables are present in the installation directories #
-# ========================================================================================================= #
+
+# =========== #
+# LOCAL RULES #
+# =========== #
+localrules: audit_wps_status, audit_wrf_status, create_wps_master_link, create_wrf_master_link
+
+# =================================================================================================================
+# TARGET RULE: La regla maestra que exige las salidas de las reglas de enlace final
+# =================================================================================================================
 rule all:
     input:
         "audit/wps_link_ready.txt",
